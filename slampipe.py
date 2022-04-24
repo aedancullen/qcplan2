@@ -19,9 +19,9 @@ def pipe_thread():
             break
         if '*' in line:
             trans = pipe.readline().split(' ')
-            data["translation"] = [int(x) for x in trans]
+            data["translation"] = [float(x) for x in trans]
             quat = pipe.readline().split(' ')
-            data["quaternion"] = [int(x) for x in quat]
+            data["quaternion"] = [float(x) for x in quat]
             state = pipe.readline()
             data["tracking_state"] = int(state)
             timestamp = pipe.readline()
