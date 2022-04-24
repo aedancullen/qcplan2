@@ -21,8 +21,10 @@ def get_data():
 def pipe_thread():
     global data
 
-    line = pipe.readline()
-    while line != "":
+    while True:
+        line = pipe.readline()
+        if line == "":
+            break
         if "value" in line:
             value = int(line.split("value")[-1])
             if "ABS_X" in line:
@@ -41,7 +43,6 @@ def pipe_thread():
                 data["a"] = value
             elif "BTN_EAST" in line:
                 data["b"] = value
-        line = pipe.readline()
     data = None
 
 pipe_daemon = threading.Thread(target=pipe_thread)
