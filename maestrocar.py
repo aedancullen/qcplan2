@@ -7,7 +7,7 @@ ACCELERATOR_CHANNEL = 5
 STEERING_CHANNEL = 4
 
 controller = maestro.Controller()
-last_update = time.time()
+last_update = 0
 
 def scale_qus(value):
     value = max(-1, value)
