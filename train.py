@@ -9,11 +9,17 @@ import slampipe
 gamepadproc = subprocess.Popen("nc -l 9867 > gamepadpipe", shell=True)
 import gamepadpipe
 
-print(slampipe.get_data())
-print(gamepadpipe.get_data())
-time.sleep(30)
-print(slampipe.get_data())
-print(gamepadpipe.get_data())
+try:
+    while True:
+        gpdata = gamepadpipe.get_data()
+        if gpdata is None:
+            break
+        accelerator = 0#-gpdata["left_stick_y"]
+        steering = gpdata["right_stick_x"]
+        maestrocar.set_controls(accelerator, steering)
+        time.sleep(0.001)
+except KeyboardInterrupt:
+    pass
 
 slamproc.send_signal(signal.SIGINT)
 slamproc.wait()

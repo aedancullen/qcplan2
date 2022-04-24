@@ -26,7 +26,7 @@ def pipe_thread():
         if line == "":
             break
         if "value" in line:
-            value = int(line.split("value")[-1])
+            value = float(line.split("value")[-1])
             if "ABS_X" in line:
                 data["left_stick_x"] = scale_js(value) if value != 128 else 0
             elif "ABS_Y" in line:
