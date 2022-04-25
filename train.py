@@ -16,7 +16,7 @@ try:
             gpdata = gamepadpipe.get_data()
             if gpdata is None:
                 break
-            accelerator = 0#min(-gpdata["left_stick_y"], 0.25)
+            accelerator = min(-gpdata["left_stick_y"], 0.25)
             steering = gpdata["right_stick_x"]
             maestrocar.set_controls(accelerator, steering)
         time.sleep(0.001)
