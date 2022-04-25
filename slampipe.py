@@ -6,12 +6,24 @@ data = {
     "quaternion": [0, 0, 0, 0],
     "tracking_state": 0,
 }
+updated = False
+
+def get_updated():
+    global data
+    global updated
+
+    return updated
 
 def get_data():
+    global data
+    global updated
+
+    updated = False
     return data
 
 def pipe_thread():
     global data
+    global updated
 
     while True:
         line = pipe.readline()
@@ -25,7 +37,9 @@ def pipe_thread():
             state = pipe.readline()
             data["tracking_state"] = int(state)
             timestamp = pipe.readline()
+            updated = True
     data = None
+    updated = True
 
 pipe_daemon = threading.Thread(target=pipe_thread)
 pipe_daemon.setDaemon(True)

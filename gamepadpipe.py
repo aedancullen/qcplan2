@@ -11,15 +11,27 @@ data = {
     "a": 0,
     "b": 0,
 }
+updated = False
 
 def scale_js(value):
     return value / 32768
 
+def get_updated():
+    global data
+    global updated
+
+    return updated
+
 def get_data():
+    global data
+    global updated
+
+    updated = False
     return data
 
 def pipe_thread():
     global data
+    global updated
 
     while True:
         line = pipe.readline()
@@ -43,7 +55,9 @@ def pipe_thread():
                 data["a"] = value
             elif "BTN_EAST" in line:
                 data["b"] = value
+            updated = True
     data = None
+    updated = True
 
 pipe_daemon = threading.Thread(target=pipe_thread)
 pipe_daemon.setDaemon(True)
