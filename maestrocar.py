@@ -14,7 +14,7 @@ def scale_qus(value):
     value = min(1, value)
     return int((500*value + 1500) * 4)
 
-def set_controls(accelerator, steering):
+def set_control(accelerator, steering):
     global last_update
 
     controller.setTarget(ACCELERATOR_CHANNEL, scale_qus(accelerator))
