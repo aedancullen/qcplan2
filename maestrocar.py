@@ -26,8 +26,8 @@ def inactivity_thread():
 
     while True:
         if last_update != -1 and time.time() - last_update > INACTIVITY_TIMEOUT:
-            print("maestrocar: inactive; zeroing controls")
-            set_controls(0, 0)
+            print("maestrocar: inactive")
+            set_control(0, 0)
             last_update = -1
         time.sleep(0.1)
 
