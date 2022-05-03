@@ -1,13 +1,25 @@
 <launch>
+
   <arg name="calib_file" default="" />
 
-  <node pkg="usb_cam" type="usb_cam_node" name="usb_cam0" output="screen">
+  <node pkg="usb_cam" type="usb_cam_node" name="cam0" output="screen">
     <param name="camera_name" value="cam0" />
-    <param name="video_device" value="/dev/video0" />
+    <param name="camera_frame_id" value="cam0" />
+    <param name="video_device" value="/dev/v4l/by-path/pci-0000:00:14.0-usb-0:3:1.0-video-index0" />
     <param name="image_width" value="640" />
     <param name="image_height" value="480" />
     <param name="pixel_format" value="mjpeg" />
-    <param name="framerate" value="60" />
+    <param name="framerate" value="120" />
+  </node>
+
+  <node pkg="usb_cam" type="usb_cam_node" name="cam1" output="screen">
+    <param name="camera_name" value="cam1" />
+    <param name="camera_frame_id" value="cam1" />
+    <param name="video_device" value="/dev/v4l/by-path/pci-0000:00:14.0-usb-0:4:1.0-video-index0" />
+    <param name="image_width" value="640" />
+    <param name="image_height" value="480" />
+    <param name="pixel_format" value="mjpeg" />
+    <param name="framerate" value="120" />
   </node>
 
   <node pkg="svo_ros" type="svo_node" name="svo" clear_params="true" output="screen" args="--v=0">
