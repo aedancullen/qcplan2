@@ -1,0 +1,10 @@
+<launch>
+
+  <arg name="calib_file" default="" />
+
+  <node pkg="svo_ros" type="svo_node" name="svo" clear_params="true" output="screen" args="--v=0">
+    <param name="calib_file" value="$(arg calib_file)" />
+    <rosparam file="$(find svo_ros)/param/pinhole.yaml" />
+  </node>
+
+</launch>

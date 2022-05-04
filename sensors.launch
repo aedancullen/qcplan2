@@ -1,6 +1,8 @@
 <launch>
 
-  <arg name="calib_file" default="" />
+  <node pkg="urg_node" type="urg_node" name="urg0" output="screen">
+    <param name="ip_address" value="192.168.0.10" />
+  </node>
 
   <node pkg="usb_cam" type="usb_cam_node" name="cam0" output="screen">
     <param name="camera_name" value="cam0" />
@@ -20,11 +22,6 @@
     <param name="image_height" value="480" />
     <param name="pixel_format" value="mjpeg" />
     <param name="framerate" value="120" />
-  </node>
-
-  <node pkg="svo_ros" type="svo_node" name="svo" clear_params="true" output="screen" args="--v=0">
-    <param name="calib_file" value="$(arg calib_file)" />
-    <rosparam file="$(find svo_ros)/param/pinhole.yaml" />
   </node>
 
 </launch>
