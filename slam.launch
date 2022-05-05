@@ -18,6 +18,11 @@
 
   <!--<node name="vis" pkg="rviz" type="rviz" args=" -d $(find svo_ros)/rviz_config.rviz" />-->
 
-  <node pkg="tf" type="static_transform_publisher" name="orient" output="screen" args="0 0 0 1.5708 -1.5708 0 world odom 100" />
+  <node pkg="tf" type="static_transform_publisher" name="orient" output="screen" args="0 0 0 -1.5708 0 -1.5708 odom world 100" />
+
+  <node pkg="slam_toolbox" type="async_slam_toolbox_node" name="slam_toolbox" output="screen">
+    <rosparam file="$(find slam_toolbox)/config/mapper_params_online_async.yaml" />
+    <param name="base_frame" value="cam_pos" />
+  </node>
 
 </launch>
