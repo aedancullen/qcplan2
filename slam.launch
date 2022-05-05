@@ -1,8 +1,8 @@
 <launch>
 
-  <arg name="calib_file" default="/home/stanley/B0332-stereo-radtan/svo_camchain-2022-05-04-16-01-01.yaml" />
+  <arg name="calib_file" default="/home/stanley/B0332-stereo-equi/svo_camchain-2022-05-05-00-22-32.yaml" />
 
-  <node pkg="svo_ros" type="svo_node" name="svo" clear_params="true" output="screen">
+  <node pkg="svo_ros" type="svo_node" name="svo" clear_params="true" output="screen" args="--logtostderr=1 --v=0">
     <param name="cam0_topic" value="/cam0/image_raw" />
     <param name="cam1_topic" value="/cam1/image_raw" />
     <param name="calib_file" value="$(arg calib_file)" />
@@ -15,5 +15,7 @@
     <param name="img_align_prior_lambda_rot" value="0.0" />
     <param name="img_align_prior_lambda_trans" value="0.0" />
   </node>
+
+  <!--<node name="vis" pkg="rviz" type="rviz" args=" -d $(find svo_ros)/rviz_config.rviz" />-->
 
 </launch>
