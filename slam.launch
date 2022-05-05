@@ -7,7 +7,6 @@
     <param name="cam1_topic" value="/cam1/image_raw" />
     <param name="calib_file" value="$(arg calib_file)" />
     <rosparam file="$(find svo_ros)/param/pinhole.yaml" />
-    <rosparam file="$(find svo_ros)/param/frontend_imu/euroc_stereo_imu.yaml" />
     <param name="pipeline_is_stereo" value="true" />
     <param name="automatic_reinitialization" value="true" />
     <param name="use_imu" value="false" />
