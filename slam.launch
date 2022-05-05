@@ -16,6 +16,4 @@
     <param name="img_align_prior_lambda_trans" value="0.0" />
   </node>
 
-  <node pkg="tf" type="static_transform_publisher" name="odom_publisher" args="0 0 0 1.571 -1.571 0 cam_pos odom 100" output="screen" />
-
 </launch>
