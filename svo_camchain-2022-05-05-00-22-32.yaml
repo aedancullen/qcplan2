@@ -1,0 +1,50 @@
+cameras:
+- T_B_C:
+    cols: 4
+    data: [0.9997921864941856, -0.017710925990964004, -0.010094896022766264, -0.11044634656855379, 0.017648854522204296, 0.9998249921743506, -0.0062050751491045265, -0.0009143524307514956, 0.010203026963697362, 0.006025622299361393, 0.9999297925937979, 0.00025714679723387156, 0.0, 0.0, 0.0,
+      1.0]
+    rows: 4
+  calib_date: 0
+  camera:
+    distortion:
+      parameters:
+        cols: 1
+        data: [0.3617660949951596, 0.27764318316364556, -0.6501697660821336, 0.7817785406511192]
+        rows: 4
+      type: equidistant
+    image_height: 480
+    image_width: 640
+    intrinsics:
+      cols: 1
+      data: [541.7297354325588, 542.0898148622683, 317.00844411243, 238.19516199849448]
+      rows: 4
+    label: cam0
+    line-delay-nanoseconds: 0
+    type: pinhole
+  description: /cam0/image_raw
+  serial_no: 0
+- T_B_C:
+    cols: 4
+    data: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+      1.0]
+    rows: 4
+  calib_date: 0
+  camera:
+    distortion:
+      parameters:
+        cols: 1
+        data: [0.3595618644299135, 0.2655863224927224, -0.3610849968483989, 0.13696936998834472]
+        rows: 4
+      type: equidistant
+    image_height: 480
+    image_width: 640
+    intrinsics:
+      cols: 1
+      data: [543.4674272602309, 544.1822079762263, 323.4684390632904, 242.95451677127892]
+      rows: 4
+    label: cam1
+    line-delay-nanoseconds: 0
+    type: pinhole
+  description: /cam1/image_raw
+  serial_no: 0
+label: camchain-2022-05-05-00-22-32.yaml

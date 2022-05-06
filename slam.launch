@@ -1,6 +1,6 @@
 <launch>
 
-  <arg name="calib_file" default="/home/stanley/B0332-stereo-equi/svo_camchain-2022-05-05-00-22-32.yaml" />
+  <arg name="calib_file" default="/home/stanley/qcplan2/svo_camchain-2022-05-05-00-22-32.yaml" />
 
   <node pkg="svo_ros" type="svo_node" name="svo" clear_params="true" output="screen" args="--logtostderr=1 --v=0">
     <param name="cam0_topic" value="/cam0/image_raw" />
