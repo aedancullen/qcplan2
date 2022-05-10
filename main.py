@@ -89,7 +89,7 @@ try:
 except KeyboardInterrupt:
     pass
 
-maestrocar.set_control(-1, 0)
+maestrocar.set_control(0, 0)
 
 gamepadproc.send_signal(signal.SIGTERM)
 gamepadproc.wait()
