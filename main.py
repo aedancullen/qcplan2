@@ -44,6 +44,32 @@ class QCPlan2:
         self.last_transform = None
         self.last_timestamp = None
 
+        self.se2space = ob.SE2StateSpace()
+        self.se2bounds = ob.RealVectorBounds(2)
+        self.se2bounds.setLow(-99999) # don't care
+        self.se2bounds.setHigh(99999)
+        self.se2space.setBounds(self.se2bounds)
+
+        self.vectorspace = ob.RealVectorStateSpace(3)
+        self.vectorbounds = ob.RealVectorBounds(3)
+        self.vectorbounds.setLow(-99999) # don't care
+        self.vectorbounds.setHigh(99999)
+        self.vectorspace.setBounds(self.vectorbounds)
+
+        self.statespace = ob.CompoundStateSpace()
+        self.statespace.addSubspace(self.se2space, 1) # weight 1
+        self.statespace.addSubspace(self.vectorspace, 1) # weight 1
+
+        self.controlspace = oc.RealVectorControlSpace(self.statespace, 2)
+
+        self.state = ob.State(self.statespace)
+        sref = self.state()
+        sref[1][0] = 0
+        sref[1][1] = 0
+        sref[1][2] = 0
+        self.se2space.setBounds(self.se2bounds)
+        self.statespace.enforceBounds(sref)
+
     def loop(self):
         transform = self.input_map.get_transform()
         timestamp = rospy.Time()
@@ -70,6 +96,7 @@ class QCPlan2:
                 rotation_diff.w,
             ])
             sref[1][2] = z / timestamp_diff
+            print(sref[1][2])
 
         self.last_transform = transform
         self.last_timestamp = timestamp
