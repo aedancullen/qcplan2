@@ -10,6 +10,7 @@ import maestrocar
 
 import rospy
 import tf2_ros
+from tf.transformations import quaternion_multiply
 from tf.transformations import euler_from_quaternion
 
 from ompl import util as ou
@@ -72,10 +73,10 @@ class QCPlan2:
 
     def loop(self):
         transform = self.input_map.get_transform()
-        timestamp = rospy.Time()
+        timestamp = rospy.Time.now()
 
         if transform is not None and self.last_transform is not None and timestamp is not None and self.last_timestamp is not None:
-            timestamp_diff = timestamp - self.last_timestamp
+            timestamp_diff = (timestamp - self.last_timestamp).to_sec()
             sref = self.state()
             sref[0].setX(transform.translation.x)
             sref[0].setY(transform.translation.y)
@@ -86,15 +87,19 @@ class QCPlan2:
                 transform.rotation.w,
             ])
             sref[0].setYaw(z)
-            sref[1][0] = 0 / time_diff
-            sref[1][1] = 0 / time_diff
-            rotation_diff = self.last_transform.rotation.inverseTimes(transform.rotation)
-            x, y, z = euler_from_quaternion([
-                rotation_diff.x,
-                rotation_diff.y,
-                rotation_diff.z,
-                rotation_diff.w,
-            ])
+            sref[1][0] = 0 / timestamp_diff
+            sref[1][1] = 0 / timestamp_diff
+            rotation_diff = quaternion_multiply(
+                [transform.rotation.x,
+                 transform.rotation.y,
+                 transform.rotation.z,
+                 transform.rotation.w],
+                 [self.last_transform.rotation.x,
+                 self.last_transform.rotation.y,
+                 self.last_transform.rotation.z,
+                 -self.last_transform.rotation.w],
+            )
+            x, y, z = euler_from_quaternion(rotation_diff)
             sref[1][2] = z / timestamp_diff
             print(sref[1][2])
 
@@ -117,6 +122,7 @@ if __name__ == "__main__":
     qc = QCPlan2(input_map)
     try:
         while not rospy.is_shutdown():
+            time.sleep(0.001)
             if qc.loop() != 0:
                 break
     except Exception as e:
