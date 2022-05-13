@@ -87,8 +87,8 @@ class QCPlan2:
                 transform.rotation.w,
             ])
             sref[0].setYaw(z)
-            sref[1][0] = 0 / timestamp_diff
-            sref[1][1] = 0 / timestamp_diff
+            sref[1][0] = (transform.translation.x - self.last_transform.translation.x) * np.cos(-z) / timestamp_diff
+            sref[1][1] = (transform.translation.y - self.last_transform.translation.y) * np.sin(-z) / timestamp_diff
             rotation_diff = quaternion_multiply(
                 [transform.rotation.x,
                  transform.rotation.y,
@@ -101,7 +101,7 @@ class QCPlan2:
             )
             x, y, z = euler_from_quaternion(rotation_diff)
             sref[1][2] = z / timestamp_diff
-            print(sref[1][2])
+            print(self.state)
 
         self.last_transform = transform
         self.last_timestamp = timestamp
