@@ -48,8 +48,8 @@ class InputMap:
     def __init__(self):
         self.transform_buffer = tf2_ros.Buffer()
         self.transform_listener = tf2_ros.TransformListener(self.transform_buffer)
-        self.laserscan_sub = rospy.Subscriber('/scan', LaserScan, laserscan_callback)
-        self.occupancygrid_sub = rospy.Subscriber("/map", OccupancyGrid, occupancygrid_callback)
+        self.laserscan_sub = rospy.Subscriber('/scan', LaserScan, self.laserscan_callback)
+        self.occupancygrid_sub = rospy.Subscriber("/map", OccupancyGrid, self.occupancygrid_callback)
 
     def get_transform(self):
         try:
@@ -199,11 +199,13 @@ class QCPlan2:
         return 0
 
     def mode_teleop(self, gpupdated, gpdata):
+        time.sleep(0.01)
+
         if self.last_gpdata is not None:
             if gpdata["x"] == 1 and self.last_gpdata["x"] == 0:
                 np.savez("f_values.npz", f_values_x=self.f_values_x, f_values_y=self.f_values_y, f_values_yaw=self.f_values_yaw)
                 print("Saved f_values")
-            if gpadata["y"] == 1 and self.last_gpdata["y"] == 0:
+            if gpdata["y"] == 1 and self.last_gpdata["y"] == 0:
                 np.savetxt("waypoints.csv", self.waypoints, delimiter=',')
                 print("Saved waypoints")
             if gpdata["b"] == 1 and self.last_gpdata["b"] == 0:
@@ -232,7 +234,6 @@ if __name__ == "__main__":
         while not rospy.is_shutdown():
             if qc.loop() != 0:
                 break
-            time.sleep(0.001)
     except Exception as e:
         print(e)
     maestrocar.set_control(0, 0)
