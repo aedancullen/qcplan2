@@ -33,6 +33,11 @@ CHUNK_DURATION = 0.1
 CHUNK_DISTANCE = 5
 GOAL_THRESHOLD = 0.5
 
+CONTROL0L = -0.25
+CONTROL0H = 0.25
+CONTROL1L = -1
+CONTROL1H = 1
+
 GRID_LENGTH = 10
 GRID0L = -10
 GRID0H = 10
@@ -40,10 +45,10 @@ GRID1L = -1
 GRID1H = 1
 GRID2L = -10
 GRID2H = 10
-GRID3L = -0.25
-GRID3H = 0.25
-GRID4L = -1
-GRID4H = 1
+GRID3L = CONTROL0L
+GRID3H = CONTROL0H
+GRID4L = CONTROL1L
+GRID4H = CONTROL1H
 
 class InputMap:
     def __init__(self):
@@ -118,6 +123,12 @@ class QCPlan2:
         self.statespace.addSubspace(self.vectorspace, 1) # weight 1
 
         self.controlspace = oc.RealVectorControlSpace(self.statespace, 2)
+        self.controlbounds = ob.RealVectorBounds(2)
+        self.controlbounds.setLow(0, CONTROL0L)
+        self.controlbounds.setHigh(0, CONTROL0H)
+        self.controlbounds.setLow(1, CONTROL1L)
+        self.controlbounds.setHigh(1, CONTROL1H)
+        sefl.controlspace.setBounds(self.controlbounds)
 
         self.state = ob.State(self.statespace)
         sref = self.state()
