@@ -79,6 +79,27 @@ class QCPlan2:
         self.grid3 = np.linspace(GRID3L, GRID3H, GRID_LENGTH)
         self.grid4 = np.linspace(GRID4L, GRID4H, GRID_LENGTH)
 
+        try:
+            with np.load("f_values.npz") as data:
+                self.f_values_x = data["f_values_x"]
+                self.f_values_y = data["f_values_y"]
+                self.f_values_yaw = data["f_values_yaw"]
+                print("Loaded f_values")
+        except:
+            self.f_values_x = np.zeros((GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH))
+            self.f_values_y = np.zeros((GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH))
+            self.f_values_yaw = np.zeros((GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH))
+
+        self.interp_x = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_x)
+        self.interp_y = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_y)
+        self.interp_yaw = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_yaw)
+
+        try:
+            self.waypoints = np.loadtxt("waypoints.csv", delimiter=',')
+            print("Loaded waypoints")
+        except:
+            self.waypoints = np.zeros((0, 2))
+
         self.se2space = ob.SE2StateSpace()
         self.se2bounds = ob.RealVectorBounds(2)
         self.se2bounds.setLow(-99999) # don't care
@@ -145,7 +166,15 @@ class QCPlan2:
             self.statespace.enforceBounds(sref)
 
             if self.last_control is not None:
-                pass
+                d0 = util.discretize(GRID0L, GRID0H, GRID_LENGTH, sref[1][0])
+                d1 = util.discretize(GRID1L, GRID1H, GRID_LENGTH, sref[1][1])
+                d2 = util.discretize(GRID2L, GRID2H, GRID_LENGTH, sref[1][2])
+                d3 = util.discretize(GRID2L, GRID2H, GRID_LENGTH, self.last_control[0])
+                d4 = util.discretize(GRID2L, GRID2H, GRID_LENGTH, self.last_control[1])
+                if d0 is not None and d1 is not None and d2 is not None and d3 is not None and d4 is not None:
+                    self.f_values_x[d0, d1, d2, d3, d4] = (self.f_values_x[d0, d1, d2, d3, d4] + sref[1][0]) / 2
+                    self.f_values_y[d0, d1, d2, d3, d4] = (self.f_values_y[d0, d1, d2, d3, d4] + sref[1][1]) / 2
+                    self.f_values_yaw[d0, d1, d2, d3, d4] = (self.f_values_yaw[d0, d1, d2, d3, d4] + sref[1][2]) / 2
 
         gpupdated = gamepadpipe.get_updated()
         gpdata = gamepadpipe.get_data()
@@ -168,6 +197,19 @@ class QCPlan2:
         return 0
 
     def mode_teleop(self, gpupdated, gpdata):
+        if self.last_gpdata is not None:
+            if gpdata["x"] == 1 and self.last_gpdata["x"] == 0:
+                np.savez("f_values.npz", f_values_x=self.f_values_x, f_values_y=self.f_values_y, f_values_yaw=self.f_values_yaw)
+                print("Saved f_values")
+            if gpadata["y"] == 1 and self.last_gpdata["y"] == 0:
+                np.savetxt("waypoints.csv", self.waypoints, delimiter=',')
+                print("Saved waypoints")
+            if gpdata["b"] == 1 and self.last_gpdata["b"] == 0:
+                sref = self.state()
+                to_append = np.array([(sref[0].getX(), sref[0].getY())])
+                self.waypoints = np.append(self.waypoints, to_append, 0)
+                print("Appended waypoint")
+
         if gpupdated:
             accelerator = max(min(-gpdata["left_stick_y"], 0.25), -0.25)
             steering = gpdata["right_stick_x"]
