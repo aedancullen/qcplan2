@@ -114,15 +114,23 @@ class QCPlan2:
         self.last_transform = transform
         self.last_timestamp = timestamp
 
-        if gamepadpipe.get_updated():
-            gpdata = gamepadpipe.get_data()
-            if gpdata is None:
-                return  -1
-            accelerator = max(min(-gpdata["left_stick_y"], 0.25), -0.25)
-            steering = gpdata["right_stick_x"]
-            maestrocar.set_control(accelerator, steering)
+        gpdata = gamepadpipe.get_data()
+        if gpdata is None:
+            return -1
+        if gpdata["a"] == 0:
+            maestrocar.set_control(self.mode_teleop(gpdata))
+        else:
+            maestrocar.set_control(self.mode_auto(gpdata))
 
         return 0
+
+    def mode_teleop(self, gpdata):
+        accelerator = max(min(-gpdata["left_stick_y"], 0.25), -0.25)
+        steering = gpdata["right_stick_x"]
+        return accelerator, steering
+
+    def mode_auto(self, gpdata):
+        return 0, 0
 
 if __name__ == "__main__":
     rospy.init_node("qcplan2")
