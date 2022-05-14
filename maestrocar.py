@@ -2,7 +2,7 @@ import maestro
 import threading
 import time
 
-INACTIVITY_TIMEOUT = 10
+INACTIVITY_TIMEOUT = 1
 ACCELERATOR_CHANNEL = 5
 STEERING_CHANNEL = 4
 
