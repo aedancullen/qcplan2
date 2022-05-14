@@ -33,16 +33,16 @@ CHUNK_DISTANCE = 5
 GOAL_THRESHOLD = 0.5
 
 GRID_LENGTH = 10
-GRID0L = 0
-GRID0H = 0
-GRID1L = 0
-GRID1H = 0
-GRID2L = 0
-GRID2H = 0
-GRID3L = 0
-GRID3H = 0
-GRID4L = 0
-GRID4H = 0
+GRID0L = -10
+GRID0H = 10
+GRID1L = -1
+GRID1H = 1
+GRID2L = -10
+GRID2H = 10
+GRID3L = -0.25
+GRID3H = 0.25
+GRID4L = -1
+GRID4H = 1
 
 class InputMap:
     def __init__(self):
@@ -175,6 +175,8 @@ class QCPlan2:
                     self.f_values_x[d0, d1, d2, d3, d4] = (self.f_values_x[d0, d1, d2, d3, d4] + sref[1][0]) / 2
                     self.f_values_y[d0, d1, d2, d3, d4] = (self.f_values_y[d0, d1, d2, d3, d4] + sref[1][1]) / 2
                     self.f_values_yaw[d0, d1, d2, d3, d4] = (self.f_values_yaw[d0, d1, d2, d3, d4] + sref[1][2]) / 2
+                else:
+                    print("Discretized point out of bounds")
 
         gpupdated = gamepadpipe.get_updated()
         gpdata = gamepadpipe.get_data()
