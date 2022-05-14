@@ -20,13 +20,14 @@ def get_updated():
     global data
     global updated
 
-    return updated
+    tmp = updated
+    updated = False
+    return tmp
 
 def get_data():
     global data
     global updated
 
-    updated = False
     return data
 
 def pipe_thread():

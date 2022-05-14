@@ -5,10 +5,14 @@ import sys
 import os
 
 import numpy as np
+from scipy.interpolate import RegularGridInterpolator
 
 import maestrocar
 
 import rospy
+from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import OccupancyGrid
+
 import tf2_ros
 from tf.transformations import quaternion_multiply
 from tf.transformations import euler_from_quaternion
@@ -28,10 +32,24 @@ CHUNK_DURATION = 0.1
 CHUNK_DISTANCE = 5
 GOAL_THRESHOLD = 0.5
 
+GRID_LENGTH = 10
+GRID0L = 0
+GRID0H = 0
+GRID1L = 0
+GRID1H = 0
+GRID2L = 0
+GRID2H = 0
+GRID3L = 0
+GRID3H = 0
+GRID4L = 0
+GRID4H = 0
+
 class InputMap:
     def __init__(self):
         self.transform_buffer = tf2_ros.Buffer()
         self.transform_listener = tf2_ros.TransformListener(self.transform_buffer)
+        self.laserscan_sub = rospy.Subscriber('/scan', LaserScan, laserscan_callback)
+        self.occupancygrid_sub = rospy.Subscriber("/map", OccupancyGrid, occupancygrid_callback)
 
     def get_transform(self):
         try:
@@ -39,11 +57,27 @@ class InputMap:
         except:
             return None
 
+    def laserscan_callback(self, laserscan):
+        pass
+
+    def occupancygrid_callback(self, occupancygrid):
+        pass
+
 class QCPlan2:
     def __init__(self, input_map):
         self.input_map = input_map
         self.last_transform = None
         self.last_timestamp = None
+        self.last_gpdata = None
+        self.last_control = None
+
+        self.auto_en = False
+
+        self.grid0 = np.linspace(GRID0L, GRID0H, GRID_LENGTH)
+        self.grid1 = np.linspace(GRID1L, GRID1H, GRID_LENGTH)
+        self.grid2 = np.linspace(GRID2L, GRID2H, GRID_LENGTH)
+        self.grid3 = np.linspace(GRID3L, GRID3H, GRID_LENGTH)
+        self.grid4 = np.linspace(GRID4L, GRID4H, GRID_LENGTH)
 
         self.se2space = ob.SE2StateSpace()
         self.se2bounds = ob.RealVectorBounds(2)
@@ -109,27 +143,41 @@ class QCPlan2:
             sref[1][2] = z / timestamp_diff
             self.se2space.setBounds(self.se2bounds)
             self.statespace.enforceBounds(sref)
-            print(self.state)
 
-        self.last_transform = transform
-        self.last_timestamp = timestamp
+            if self.last_control is not None:
+                pass
 
+        gpupdated = gamepadpipe.get_updated()
         gpdata = gamepadpipe.get_data()
         if gpdata is None:
             return -1
-        if gpdata["a"] == 0:
-            maestrocar.set_control(self.mode_teleop(gpdata))
-        else:
-            maestrocar.set_control(self.mode_auto(gpdata))
 
+        if self.auto_en:
+            control = self.mode_auto(gpupdated, gpdata)
+            if gpdata["a"] == 0:
+                self.auto_en = False
+        else:
+            control = self.mode_teleop(gpupdated, gpdata)
+            if gpdata["a"] == 1:
+                self.auto_en = True
+
+        self.last_transform = transform
+        self.last_timestamp = timestamp
+        self.last_gpdata = gpdata
+        self.last_control = control
         return 0
 
-    def mode_teleop(self, gpdata):
-        accelerator = max(min(-gpdata["left_stick_y"], 0.25), -0.25)
-        steering = gpdata["right_stick_x"]
-        return accelerator, steering
+    def mode_teleop(self, gpupdated, gpdata):
+        if gpupdated:
+            accelerator = max(min(-gpdata["left_stick_y"], 0.25), -0.25)
+            steering = gpdata["right_stick_x"]
+            maestrocar.set_control(accelerator, steering)
+            return accelerator, steering
+        else:
+            return self.last_control
 
-    def mode_auto(self, gpdata):
+    def mode_auto(self, gpupdated, gpdata):
+        maestrocar.set_control(0, 0)
         return 0, 0
 
 if __name__ == "__main__":
@@ -138,9 +186,9 @@ if __name__ == "__main__":
     qc = QCPlan2(input_map)
     try:
         while not rospy.is_shutdown():
-            time.sleep(0.1)
             if qc.loop() != 0:
                 break
+            time.sleep(0.001)
     except Exception as e:
         print(e)
     maestrocar.set_control(0, 0)
