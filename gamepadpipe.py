@@ -49,13 +49,13 @@ def pipe_thread():
             elif "ABS_RY" in line:
                 data["right_stick_y"] = scale_js(value) if value != -129 else 0
             elif "BTN_NORTH" in line:
-                data["x"] = value
+                data["x"] = int(value)
             elif "BTN_WEST" in line:
-                data["y"] = value
+                data["y"] = int(value)
             elif "BTN_SOUTH" in line:
-                data["a"] = value
+                data["a"] = int(value)
             elif "BTN_EAST" in line:
-                data["b"] = value
+                data["b"] = int(value)
             updated = True
     data = None
     updated = True

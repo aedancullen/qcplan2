@@ -1,5 +1,6 @@
 import subprocess
 import signal
+import copy
 import time
 import sys
 import os
@@ -185,30 +186,30 @@ class QCPlan2:
 
         if self.auto_en:
             control = self.mode_auto(gpupdated, gpdata)
-            if gpdata["a"] == 0:
+            if gpdata['a'] == 0:
                 self.auto_en = False
         else:
             control = self.mode_teleop(gpupdated, gpdata)
-            if gpdata["a"] == 1:
+            if gpdata['a'] == 1:
                 self.auto_en = True
 
-        self.last_transform = transform
-        self.last_timestamp = timestamp
-        self.last_gpdata = gpdata
-        self.last_control = control
+        self.last_transform = copy.copy(transform)
+        self.last_timestamp = copy.copy(timestamp)
+        self.last_gpdata = copy.copy(gpdata)
+        self.last_control = copy.copy(control)
         return 0
 
     def mode_teleop(self, gpupdated, gpdata):
         time.sleep(0.01)
 
         if self.last_gpdata is not None:
-            if gpdata["x"] == 1 and self.last_gpdata["x"] == 0:
+            if gpdata['x'] == 1 and self.last_gpdata['x'] == 0:
                 np.savez("f_values.npz", f_values_x=self.f_values_x, f_values_y=self.f_values_y, f_values_yaw=self.f_values_yaw)
                 print("Saved f_values")
-            if gpdata["y"] == 1 and self.last_gpdata["y"] == 0:
+            if gpdata['y'] == 1 and self.last_gpdata['y'] == 0:
                 np.savetxt("waypoints.csv", self.waypoints, delimiter=',')
                 print("Saved waypoints")
-            if gpdata["b"] == 1 and self.last_gpdata["b"] == 0:
+            if gpdata['b'] == 1 and self.last_gpdata['b'] == 0:
                 sref = self.state()
                 to_append = np.array([(sref[0].getX(), sref[0].getY())])
                 self.waypoints = np.append(self.waypoints, to_append, 0)
