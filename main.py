@@ -96,9 +96,9 @@ class QCPlan2:
             self.f_values_y = np.zeros((GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH))
             self.f_values_yaw = np.zeros((GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH))
 
-        self.interp_x = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_x)
-        self.interp_y = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_y)
-        self.interp_yaw = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_yaw)
+        self.interp_x = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_x, fill_value=None)
+        self.interp_y = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_y, fill_value=None)
+        self.interp_yaw = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_yaw, fill_value=None)
 
         try:
             self.waypoints = np.loadtxt("waypoints.csv", delimiter=',')
@@ -128,7 +128,7 @@ class QCPlan2:
         self.controlbounds.setHigh(0, CONTROL0H)
         self.controlbounds.setLow(1, CONTROL1L)
         self.controlbounds.setHigh(1, CONTROL1H)
-        sefl.controlspace.setBounds(self.controlbounds)
+        self.controlspace.setBounds(self.controlbounds)
 
         self.state = ob.State(self.statespace)
         sref = self.state()
@@ -137,6 +137,8 @@ class QCPlan2:
         sref[1][2] = 0
         self.se2space.setBounds(self.se2bounds)
         self.statespace.enforceBounds(sref)
+
+        self.future_state = ob.State(self.statespace)
 
     def loop(self):
         transform = self.input_map.get_transform()
@@ -204,6 +206,11 @@ class QCPlan2:
             if gpdata['a'] == 1:
                 self.auto_en = True
 
+        if control is not None:
+            self.state_propagate(self.future_state(), control, self.state())
+        else:
+            self.statespace.copyState(self.future_state(), self.state())
+
         self.last_transform = copy.copy(transform)
         self.last_timestamp = copy.copy(timestamp)
         self.last_gpdata = copy.copy(gpdata)
@@ -211,7 +218,7 @@ class QCPlan2:
         return 0
 
     def mode_teleop(self, gpupdated, gpdata):
-        time.sleep(0.01)
+        time.sleep(0.02)
 
         if self.last_gpdata is not None:
             if gpdata['x'] == 1 and self.last_gpdata['x'] == 0:
@@ -237,6 +244,27 @@ class QCPlan2:
     def mode_auto(self, gpupdated, gpdata):
         maestrocar.set_control(0, 0)
         return 0, 0
+
+    def state_validity_check(self, state):
+        pass
+
+    def state_propagate(self, future_state, control, state):
+        result_x = self.interp_x((state[1][0], state[1][1], state[1][2], control[0], control[1]))
+        result_y = self.interp_y((state[1][0], state[1][1], state[1][2], control[0], control[1]))
+        result_yaw = self.interp_yaw((state[1][0], state[1][1], state[1][2], control[0], control[1]))
+        future_state[1][0] = result_x
+        future_state[1][1] = result_y
+        future_state[1][2] = result_yaw
+        new_yaw = state[0].getYaw() + result_yaw * CHUNK_DURATION
+        future_state[0].setX(state[0].getX() +
+            result_x * np.cos(new_yaw) * CHUNK_DURATION
+            - result_y * np.sin(new_yaw) * CHUNK_DURATION
+        )
+        future_state[0].setY(state[0].getY() +
+            result_y * np.cos(new_yaw) * CHUNK_DURATION
+            + result_x * np.sin(new_yaw) * CHUNK_DURATION
+        )
+        future_state[0].setYaw(new_yaw)
 
 if __name__ == "__main__":
     rospy.init_node("qcplan2")
