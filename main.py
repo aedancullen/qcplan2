@@ -138,8 +138,6 @@ class QCPlan2:
         self.se2space.setBounds(self.se2bounds)
         self.statespace.enforceBounds(sref)
 
-        self.future_state = ob.State(self.statespace)
-
     def loop(self):
         transform = self.input_map.get_transform()
         timestamp = rospy.Time.now()
@@ -206,11 +204,6 @@ class QCPlan2:
             if gpdata['a'] == 1:
                 self.auto_en = True
 
-        if control is not None:
-            self.state_propagate(self.future_state(), control, self.state())
-        else:
-            self.statespace.copyState(self.future_state(), self.state())
-
         self.last_transform = copy.copy(transform)
         self.last_timestamp = copy.copy(timestamp)
         self.last_gpdata = copy.copy(gpdata)
@@ -242,11 +235,21 @@ class QCPlan2:
             return self.last_control
 
     def mode_auto(self, gpupdated, gpdata):
-        maestrocar.set_control(0, 0)
-        return 0, 0
+        if True: # planned_control
+            accelerator = #TODO
+            steering = #TODO
+        else:
+            accelerator = 0
+            steering = 0
+        maestrocar.set_control(accelerator, steering)
+
+        planfrom_state = ob.State(self.statespace)
+        self.state_propagate(planfrom_state(), #TODO, self.state())
+
+        return accelerator, steering
 
     def state_validity_check(self, state):
-        pass
+        return self.statespace.satisfiesBounds(state)
 
     def state_propagate(self, future_state, control, state):
         result_x = self.interp_x((state[1][0], state[1][1], state[1][2], control[0], control[1]))
