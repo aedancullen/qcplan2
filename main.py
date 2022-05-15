@@ -138,10 +138,6 @@ class QCPlan2:
         self.si.setPropagationStepSize(1)
         self.si.setMinMaxControlDuration(1, 1)
 
-        self.planner = oc.SST(self.si)
-        self.ss.clear()
-        self.ss.setPlanner(self.planner)
-
         self.state = ob.State(self.statespace)
         sref = self.state()
         sref[1][0] = 0
@@ -218,6 +214,9 @@ class QCPlan2:
             control = self.mode_teleop(gpupdated, gpdata)
             if gpdata['a'] == 1:
                 self.auto_en = True
+                self.planner = oc.SST(self.si)
+                self.ss.clear()
+                self.ss.setPlanner(self.planner)
 
         self.last_transform = copy.copy(transform)
         self.last_timestamp = copy.copy(timestamp)
@@ -242,7 +241,7 @@ class QCPlan2:
                 print("Appended waypoint")
 
         if gpupdated:
-            accelerator = max(min(-gpdata["left_stick_y"], 0.25), -0.25)
+            accelerator = -gpdata["left_stick_y"] * 0.25
             steering = gpdata["right_stick_x"]
             maestrocar.set_control(accelerator, steering)
             return accelerator, steering
@@ -259,12 +258,15 @@ class QCPlan2:
             steering = controls[0][1]
             maestrocar.set_control(accelerator, steering)
             if self.validate_path(sref, controls):
+                print("Solved, stepping tree")
                 self.planner.stepTree()
             else:
+                print("Solved, resetting tree")
                 self.planner = oc.SST(self.si)
                 self.ss.clear()
                 self.ss.setPlanner(self.planner)
         else:
+            print("Unsolved, resetting tree")
             accelerator = 0
             steering = 0
             maestrocar.set_control(accelerator, steering)
