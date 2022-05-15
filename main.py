@@ -250,13 +250,15 @@ class QCPlan2:
             return self.last_control
 
     def mode_auto(self, gpupdated, gpdata):
+        sref = self.state()
+
         if self.ss.getLastPlannerStatus():
             solution = self.ssh.getSolutionPath()
             controls = solution.getControls()
             accelerator = controls[0][0]
             steering = controls[0][1]
             maestrocar.set_control(accelerator, steering)
-            if not self.validate_path(controls):
+            if not self.validate_path(sref, controls):
                 self.planner = oc.SST(self.si)
                 self.ss.clear()
                 self.ss.setPlanner(self.planner)
@@ -267,8 +269,6 @@ class QCPlan2:
             self.planner = oc.SST(self.si)
             self.ss.clear()
             self.ss.setPlanner(self.planner)
-
-        sref = self.state()
 
         start_state = ob.State(self.statespace)
         start_state_ref = start_state()
@@ -316,6 +316,13 @@ class QCPlan2:
             + result_x * np.sin(new_yaw) * CHUNK_DURATION
         )
         future_state[0].setYaw(new_yaw)
+
+    def validate_path(state, controls):
+        for control in controls:
+            self.state_propagate(state, control, 1, state)
+            if not state_validity_check(state):
+                return False
+        return True
 
 if __name__ == "__main__":
     rospy.init_node("qcplan2")
