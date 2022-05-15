@@ -244,7 +244,7 @@ class QCPlan2:
         maestrocar.set_control(accelerator, steering)
 
         planfrom_state = ob.State(self.statespace)
-        self.state_propagate(planfrom_state(), #TODO, self.state())
+        self.state_propagate(planfrom_state(), (accelerator, steering), self.state())
 
         return accelerator, steering
 
