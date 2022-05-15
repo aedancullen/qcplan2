@@ -304,9 +304,9 @@ class QCPlan2:
         return self.statespace.satisfiesBounds(state)
 
     def state_propagate(self, state, control, duration, future_state):
-        result_x = self.interp_x((state[1][0], state[1][1], state[1][2], control[0], control[1]))
-        result_y = self.interp_y((state[1][0], state[1][1], state[1][2], control[0], control[1]))
-        result_yaw = self.interp_yaw((state[1][0], state[1][1], state[1][2], control[0], control[1]))
+        result_x = self.interp_x([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
+        result_y = self.interp_y([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
+        result_yaw = self.interp_yaw([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
         future_state[1][0] = result_x
         future_state[1][1] = result_y
         future_state[1][2] = result_yaw
@@ -336,8 +336,8 @@ if __name__ == "__main__":
         while not rospy.is_shutdown():
             if qc.loop() != 0:
                 break
-    except Exception as e:
-        print(e)
-    maestrocar.set_control(0, 0)
-    gamepadproc.send_signal(signal.SIGTERM)
-    gamepadproc.wait()
+    finally:
+        print("Exiting; zeroing controls")
+        maestrocar.set_control(0, 0)
+        gamepadproc.send_signal(signal.SIGTERM)
+        gamepadproc.wait()
