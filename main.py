@@ -130,6 +130,18 @@ class QCPlan2:
         self.controlbounds.setHigh(1, CONTROL1H)
         self.controlspace.setBounds(self.controlbounds)
 
+        self.ss = oc.SimpleSetup(self.controlspace)
+        self.ss.setStateValidityChecker(ob.StateValidityCheckerFn(self.state_validity_check))
+        self.ss.setStatePropagator(oc.StatePropagatorFn(self.state_propagate))
+
+        self.si = self.ss.getSpaceInformation()
+        self.si.setPropagationStepSize(1)
+        self.si.setMinMaxControlDuration(1, 1)
+
+        self.planner = oc.SST(self.si)
+        self.ss.clear()
+        self.ss.setPlanner(self.planner)
+
         self.state = ob.State(self.statespace)
         sref = self.state()
         sref[1][0] = 0
@@ -187,6 +199,9 @@ class QCPlan2:
                     self.f_values_x[d0, d1, d2, d3, d4] = (self.f_values_x[d0, d1, d2, d3, d4] + sref[1][0]) / 2
                     self.f_values_y[d0, d1, d2, d3, d4] = (self.f_values_y[d0, d1, d2, d3, d4] + sref[1][1]) / 2
                     self.f_values_yaw[d0, d1, d2, d3, d4] = (self.f_values_yaw[d0, d1, d2, d3, d4] + sref[1][2]) / 2
+                    self.interp_x = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_x, fill_value=None)
+                    self.interp_y = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_y, fill_value=None)
+                    self.interp_yaw = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_yaw, fill_value=None)
                 else:
                     print("Discretized point out of bounds")
 
@@ -235,23 +250,56 @@ class QCPlan2:
             return self.last_control
 
     def mode_auto(self, gpupdated, gpdata):
-        if True: # planned_control
-            accelerator = #TODO
-            steering = #TODO
+        if self.ss.getLastPlannerStatus():
+            solution = self.ssh.getSolutionPath()
+            controls = solution.getControls()
+            accelerator = controls[0][0]
+            steering = controls[0][1]
+            maestrocar.set_control(accelerator, steering)
+            if not self.validate_path(controls):
+                self.planner = oc.SST(self.si)
+                self.ss.clear()
+                self.ss.setPlanner(self.planner)
         else:
             accelerator = 0
             steering = 0
-        maestrocar.set_control(accelerator, steering)
+            maestrocar.set_control(accelerator, steering)
+            self.planner = oc.SST(self.si)
+            self.ss.clear()
+            self.ss.setPlanner(self.planner)
 
-        planfrom_state = ob.State(self.statespace)
-        self.state_propagate(planfrom_state(), (accelerator, steering), self.state())
+        sref = self.state()
+
+        start_state = ob.State(self.statespace)
+        start_state_ref = start_state()
+        self.state_propagate(sref, (accelerator, steering), 1, start_state_ref)
+        self.ss.setStartState(start_state)
+
+        goal_state = ob.State(self.statespace)
+        goal_state_ref = goal_state()
+        start_point = np.array([start_state_ref[0].getX(), start_state_ref[0].getY()])
+        nearest_point, nearest_dist, t, i = util.nearest_point_on_trajectory(start_point, self.waypoints)
+        goal_point, goal_angle, t, i = util.walk_along_trajectory(self.waypoints, t, i, CHUNK_DISTANCE)
+        goal_state_ref[0].setX(goal_point[0])
+        goal_state_ref[0].setY(goal_point[1])
+        goal_state_ref[0].setYaw(goal_angle)
+        self.ss.setGoalState(goal_state, GOAL_THRESHOLD)
+
+        self.se2bounds = ob.RealVectorBounds(2)
+        self.se2bounds.setLow(0, min(goal_point[0], start_point[0]) - CHUNK_DISTANCE / 2)
+        self.se2bounds.setLow(1, min(goal_point[1], start_point[1]) - CHUNK_DISTANCE / 2)
+        self.se2bounds.setHigh(0, max(goal_point[0], start_point[0]) + CHUNK_DISTANCE / 2)
+        self.se2bounds.setHigh(1, max(goal_point[1], start_point[1]) + CHUNK_DISTANCE / 2)
+        self.se2space.setBounds(self.se2bounds)
+
+        self.ss.solve(CHUNK_DURATION)
 
         return accelerator, steering
 
     def state_validity_check(self, state):
         return self.statespace.satisfiesBounds(state)
 
-    def state_propagate(self, future_state, control, state):
+    def state_propagate(self, state, control, duration, future_state):
         result_x = self.interp_x((state[1][0], state[1][1], state[1][2], control[0], control[1]))
         result_y = self.interp_y((state[1][0], state[1][1], state[1][2], control[0], control[1]))
         result_yaw = self.interp_yaw((state[1][0], state[1][1], state[1][2], control[0], control[1]))
