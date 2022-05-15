@@ -337,7 +337,7 @@ if __name__ == "__main__":
             if qc.loop() != 0:
                 break
     finally:
-        print("Exiting; zeroing controls")
+        print("Exiting, zeroing controls")
         maestrocar.set_control(0, 0)
         gamepadproc.send_signal(signal.SIGTERM)
         gamepadproc.wait()
