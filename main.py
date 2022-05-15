@@ -258,7 +258,9 @@ class QCPlan2:
             accelerator = controls[0][0]
             steering = controls[0][1]
             maestrocar.set_control(accelerator, steering)
-            if not self.validate_path(sref, controls):
+            if self.validate_path(sref, controls):
+                self.planner.stepTree()
+            else:
                 self.planner = oc.SST(self.si)
                 self.ss.clear()
                 self.ss.setPlanner(self.planner)
