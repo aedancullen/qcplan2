@@ -6,7 +6,7 @@ import sys
 import os
 
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator
+from scipy.ndimage import map_coordinates
 
 import maestrocar
 
@@ -79,12 +79,6 @@ class QCPlan2:
 
         self.auto_en = False
 
-        self.grid0 = np.linspace(GRID0L, GRID0H, GRID_LENGTH)
-        self.grid1 = np.linspace(GRID1L, GRID1H, GRID_LENGTH)
-        self.grid2 = np.linspace(GRID2L, GRID2H, GRID_LENGTH)
-        self.grid3 = np.linspace(GRID3L, GRID3H, GRID_LENGTH)
-        self.grid4 = np.linspace(GRID4L, GRID4H, GRID_LENGTH)
-
         try:
             with np.load("f_values.npz") as data:
                 self.f_values_x = data["f_values_x"]
@@ -95,10 +89,6 @@ class QCPlan2:
             self.f_values_x = np.zeros((GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH))
             self.f_values_y = np.zeros((GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH))
             self.f_values_yaw = np.zeros((GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH))
-
-        self.interp_x = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_x, fill_value=None)
-        self.interp_y = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_y, fill_value=None)
-        self.interp_yaw = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_yaw, fill_value=None)
 
         try:
             self.waypoints = np.loadtxt("waypoints.csv", delimiter=',')
@@ -195,9 +185,6 @@ class QCPlan2:
                     self.f_values_x[d0, d1, d2, d3, d4] = (self.f_values_x[d0, d1, d2, d3, d4] + sref[1][0]) / 2
                     self.f_values_y[d0, d1, d2, d3, d4] = (self.f_values_y[d0, d1, d2, d3, d4] + sref[1][1]) / 2
                     self.f_values_yaw[d0, d1, d2, d3, d4] = (self.f_values_yaw[d0, d1, d2, d3, d4] + sref[1][2]) / 2
-                    self.interp_x = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_x, fill_value=None)
-                    self.interp_y = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_y, fill_value=None)
-                    self.interp_yaw = RegularGridInterpolator((self.grid0, self.grid1, self.grid2, self.grid3, self.grid4), self.f_values_yaw, fill_value=None)
                 else:
                     print("Discretized point out of bounds")
 
@@ -306,9 +293,15 @@ class QCPlan2:
         return self.statespace.satisfiesBounds(state)
 
     def state_propagate(self, state, control, duration, future_state):
-        result_x = 0.1#self.interp_x([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
-        result_y = 0#self.interp_y([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
-        result_yaw = 0#self.interp_yaw([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
+        d0 = util.unit_scale(GRID0L, GRID0H, state[1][0])
+        d1 = util.unit_scale(GRID1L, GRID1H, state[1][1])
+        d2 = util.unit_scale(GRID2L, GRID2H, state[1][2])
+        d3 = util.unit_scale(GRID3L, GRID3H, control[0])
+        d4 = util.unit_scale(GRID4L, GRID4H, control[1])
+        data = np.asarray([[d0], [d1], [d2], [d3], [d4]]) * (GRID_LENGTH - 1)
+        result_x = map_coordinates(self.f_values_x, data, order=1, mode="nearest")[0]
+        result_y = map_coordinates(self.f_values_y, data, order=1, mode="nearest")[0]
+        result_yaw = map_coordinates(self.f_values_yaw, data, order=1, mode="nearest")[0]
         future_state[1][0] = result_x
         future_state[1][1] = result_y
         future_state[1][2] = result_yaw

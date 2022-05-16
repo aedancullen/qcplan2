@@ -59,3 +59,7 @@ def discretize(low, high, length, value):
     if value < low or value > high:
         return None
     return round((value - low) / (high - low) * (length - 1))
+
+@njit(cache=True)
+def unit_scale(low, high, value):
+    return (value - low) / (high - low)
