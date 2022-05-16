@@ -30,7 +30,7 @@ import util
 #ou.setLogLevel(ou.LOG_ERROR)
 
 CHUNK_DURATION = 0.1
-CHUNK_DISTANCE = 5
+CHUNK_DISTANCE = 1
 GOAL_THRESHOLD = 0.5
 
 CONTROL0L = -0.25
@@ -252,7 +252,7 @@ class QCPlan2:
         sref = self.state()
 
         if self.ss.getLastPlannerStatus():
-            solution = self.ssh.getSolutionPath()
+            solution = self.ss.getSolutionPath()
             controls = solution.getControls()
             accelerator = controls[0][0]
             steering = controls[0][1]
@@ -296,6 +296,8 @@ class QCPlan2:
         self.se2bounds.setHigh(1, max(goal_point[1], start_point[1]) + CHUNK_DISTANCE / 2)
         self.se2space.setBounds(self.se2bounds)
 
+        self.planner.setPruningRadius(0.00)
+        self.planner.setSelectionRadius(0.00)
         self.ss.solve(CHUNK_DURATION)
 
         return accelerator, steering
@@ -304,9 +306,9 @@ class QCPlan2:
         return self.statespace.satisfiesBounds(state)
 
     def state_propagate(self, state, control, duration, future_state):
-        result_x = self.interp_x([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
-        result_y = self.interp_y([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
-        result_yaw = self.interp_yaw([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
+        result_x = 0.1#self.interp_x([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
+        result_y = 0#self.interp_y([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
+        result_yaw = 0#self.interp_yaw([state[1][0], state[1][1], state[1][2], control[0], control[1]])[0]
         future_state[1][0] = result_x
         future_state[1][1] = result_y
         future_state[1][2] = result_yaw
@@ -321,10 +323,10 @@ class QCPlan2:
         )
         future_state[0].setYaw(new_yaw)
 
-    def validate_path(state, controls):
+    def validate_path(self, state, controls):
         for control in controls:
             self.state_propagate(state, control, 1, state)
-            if not state_validity_check(state):
+            if not self.state_validity_check(state):
                 return False
         return True
 
