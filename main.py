@@ -27,11 +27,11 @@ import gamepadpipe
 
 import util
 
-#ou.setLogLevel(ou.LOG_ERROR)
+ou.setLogLevel(ou.LOG_INFO)
 
 CHUNK_DURATION = 0.1
-CHUNK_DISTANCE = 1
-GOAL_THRESHOLD = 0.5
+CHUNK_DISTANCE = 5
+GOAL_THRESHOLD = 1
 
 CONTROL0L = -0.25
 CONTROL0H = 0.25
@@ -39,12 +39,12 @@ CONTROL1L = -1
 CONTROL1H = 1
 
 GRID_LENGTH = 10
-GRID0L = -10
-GRID0H = 10
+GRID0L = -5
+GRID0H = 5
 GRID1L = -1
 GRID1H = 1
-GRID2L = -10
-GRID2H = 10
+GRID2L = -5
+GRID2H = 5
 GRID3L = CONTROL0L
 GRID3H = CONTROL0H
 GRID4L = CONTROL1L
@@ -114,7 +114,7 @@ class QCPlan2:
 
         self.controlspace = oc.RealVectorControlSpace(self.statespace, 2)
         self.controlbounds = ob.RealVectorBounds(2)
-        self.controlbounds.setLow(0, CONTROL0L)
+        self.controlbounds.setLow(0, 0)
         self.controlbounds.setHigh(0, CONTROL0H)
         self.controlbounds.setLow(1, CONTROL1L)
         self.controlbounds.setHigh(1, CONTROL1H)
@@ -179,9 +179,10 @@ class QCPlan2:
                 d0 = util.discretize(GRID0L, GRID0H, GRID_LENGTH, sref[1][0])
                 d1 = util.discretize(GRID1L, GRID1H, GRID_LENGTH, sref[1][1])
                 d2 = util.discretize(GRID2L, GRID2H, GRID_LENGTH, sref[1][2])
-                d3 = util.discretize(GRID2L, GRID2H, GRID_LENGTH, self.last_control[0])
-                d4 = util.discretize(GRID2L, GRID2H, GRID_LENGTH, self.last_control[1])
+                d3 = util.discretize(GRID3L, GRID3H, GRID_LENGTH, self.last_control[0])
+                d4 = util.discretize(GRID4L, GRID4H, GRID_LENGTH, self.last_control[1])
                 if d0 is not None and d1 is not None and d2 is not None and d3 is not None and d4 is not None:
+                    #print([d0, d1, d2, d3, d4])
                     self.f_values_x[d0, d1, d2, d3, d4] = (self.f_values_x[d0, d1, d2, d3, d4] + sref[1][0]) / 2
                     self.f_values_y[d0, d1, d2, d3, d4] = (self.f_values_y[d0, d1, d2, d3, d4] + sref[1][1]) / 2
                     self.f_values_yaw[d0, d1, d2, d3, d4] = (self.f_values_yaw[d0, d1, d2, d3, d4] + sref[1][2]) / 2
@@ -201,9 +202,6 @@ class QCPlan2:
             control = self.mode_teleop(gpupdated, gpdata)
             if gpdata['a'] == 1:
                 self.auto_en = True
-                self.planner = oc.SST(self.si)
-                self.ss.clear()
-                self.ss.setPlanner(self.planner)
 
         self.last_transform = copy.copy(transform)
         self.last_timestamp = copy.copy(timestamp)
@@ -239,27 +237,31 @@ class QCPlan2:
         sref = self.state()
 
         if self.ss.getLastPlannerStatus():
+            print("Solved")
             solution = self.ss.getSolutionPath()
             controls = solution.getControls()
             accelerator = controls[0][0]
             steering = controls[0][1]
             maestrocar.set_control(accelerator, steering)
-            if self.validate_path(sref, controls):
-                print("Solved, stepping tree")
-                self.planner.stepTree()
-            else:
-                print("Solved, resetting tree")
-                self.planner = oc.SST(self.si)
-                self.ss.clear()
-                self.ss.setPlanner(self.planner)
         else:
-            print("Unsolved, resetting tree")
+            print("Unsolved")
+            solution = None
             accelerator = 0
             steering = 0
             maestrocar.set_control(accelerator, steering)
-            self.planner = oc.SST(self.si)
-            self.ss.clear()
-            self.ss.setPlanner(self.planner)
+
+        print(accelerator, steering)
+
+        self.planner = oc.SST(self.si)
+        self.planner.setPruningRadius(0.00)
+        self.planner.setSelectionRadius(0.00)
+
+        if solution is not None:
+            # Copy old path into a new PathControl (and keep a local reference) because it will be freed on self.ss.clear()
+            seed_path = oc.PathControl(solution)
+            self.planner.setSeedPath(seed_path, 1)
+
+        self.ss.clear()
 
         start_state = ob.State(self.statespace)
         start_state_ref = start_state()
@@ -283,8 +285,7 @@ class QCPlan2:
         self.se2bounds.setHigh(1, max(goal_point[1], start_point[1]) + CHUNK_DISTANCE / 2)
         self.se2space.setBounds(self.se2bounds)
 
-        self.planner.setPruningRadius(0.00)
-        self.planner.setSelectionRadius(0.00)
+        self.ss.setPlanner(self.planner)
         self.ss.solve(CHUNK_DURATION)
 
         return accelerator, steering
@@ -293,12 +294,14 @@ class QCPlan2:
         return self.statespace.satisfiesBounds(state)
 
     def state_propagate(self, state, control, duration, future_state):
+        print(control[0], control[1])
         d0 = util.unit_scale(GRID0L, GRID0H, state[1][0])
         d1 = util.unit_scale(GRID1L, GRID1H, state[1][1])
         d2 = util.unit_scale(GRID2L, GRID2H, state[1][2])
         d3 = util.unit_scale(GRID3L, GRID3H, control[0])
         d4 = util.unit_scale(GRID4L, GRID4H, control[1])
         data = np.asarray([[d0], [d1], [d2], [d3], [d4]]) * (GRID_LENGTH - 1)
+        #print(data)
         result_x = map_coordinates(self.f_values_x, data, order=1, mode="nearest")[0]
         result_y = map_coordinates(self.f_values_y, data, order=1, mode="nearest")[0]
         result_yaw = map_coordinates(self.f_values_yaw, data, order=1, mode="nearest")[0]
@@ -315,13 +318,9 @@ class QCPlan2:
             + result_x * np.sin(new_yaw) * CHUNK_DURATION
         )
         future_state[0].setYaw(new_yaw)
-
-    def validate_path(self, state, controls):
-        for control in controls:
-            self.state_propagate(state, control, 1, state)
-            if not self.state_validity_check(state):
-                return False
-        return True
+        print(state[0].getX(), state[0].getY(), state[1][0], state[1][1], state[1][2])
+        print(future_state[0].getX(), future_state[0].getY(), future_state[1][0], future_state[1][1], future_state[1][2])
+        print()
 
 if __name__ == "__main__":
     rospy.init_node("qcplan2")
