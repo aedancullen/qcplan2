@@ -30,7 +30,7 @@ import util
 ou.setLogLevel(ou.LOG_INFO)
 
 CHUNK_DURATION = 0.1
-CHUNK_DISTANCE = 5
+CHUNK_DISTANCE = 2
 GOAL_THRESHOLD = 1
 
 CONTROL0L = -0.25
@@ -38,9 +38,9 @@ CONTROL0H = 0.25
 CONTROL1L = -1
 CONTROL1H = 1
 
-MASS = 1
-WHEELBASE = 1
-PHI_MAX = 1
+MASS = 0.1
+WHEELBASE = 0.324
+PHI_MAX = 0.785
 
 class InputMap:
     def __init__(self):
@@ -62,27 +62,43 @@ class InputMap:
         pass
 
 class QCPlanStatePropagator(oc.StatePropagator):
-    def __init__(self, si):
-        super().__init__(si)
-        self.solver = oc.ODEBasicSolver(si, oc.ODE(self.ode))
-        self.odeprop = oc.ODESolver.getStatePropagator(self.solver)
-
     def propagate(self, state, control, duration, result):
-        self.odeprop.propagate(state, control, duration, result)
+        a = control[0] / MASS
+        s = state[1][0] + a * CHUNK_DURATION
+        distance = s * CHUNK_DURATION
+        yaw = state[0].getYaw()
+        if np.abs(control[1]) < 0.1:
+            result[0].setX(state[0].getX() + distance * np.cos(yaw))
+            result[0].setY(state[0].getY() + distance * np.sin(yaw))
+            result[0].setYaw(yaw)
+        else:
+            radius = WHEELBASE / np.tan(-control[1] * PHI_MAX)
+            curofs_x = radius * np.cos(yaw)
+            curofs_y = radius * np.sin(yaw)
+            center_x = state[0].getX() - curofs_x
+            center_y = state[0].getY() - curofs_y
+            traveled_angle = distance / radius
+            newofs_x = radius * np.cos(yaw + traveled_angle)
+            newofs_y = radius * np.sin(yaw + traveled_angle)
+            result[0].setX(center_x + newofs_x)
+            result[0].setY(center_y + newofs_y)
+            result[0].setYaw(yaw + traveled_angle)
+        result[1][0] = s
 
-    def ode(self, q, u, qdot):
-        print(q)
-        print(u)
-        print(qdot)
-        a = u[0] / MASS
-        s = q[3] + a * CHUNK_DURATION
-        qdot[0] = q[0] + s * np.cos(q[2])
-        qdot[1] = q[1] + s * np.sin(q[2])
-        qdot[2] = q[2] + s / WHEELBASE * np.tan(u[1] * PHI_MAX)
-        qdot[3] = s
+    def canSteer(self):
+        return True
 
     def steer(self, from_state, to_state, result, duration):
-        pass
+        heading = np.arctan2(to_state[0].getY() - from_state[0].getY(), to_state[0].getX() - from_state[0].getX())
+        rel = heading - from_state[0].getYaw()
+        angle = np.arcsin(np.sin(rel))
+        result[1] = -angle / PHI_MAX
+        result[1] = min(max(result[1], CONTROL1L), CONTROL1H)
+        if np.cos(rel) > 0:
+            result[0] = np.random.uniform(0, CONTROL0H)
+        else:
+            result[0] = np.random.uniform(CONTROL0L, 0)
+        return True
 
 class QCPlan2:
     def __init__(self, input_map):
@@ -114,7 +130,7 @@ class QCPlan2:
 
         self.statespace = ob.CompoundStateSpace()
         self.statespace.addSubspace(self.se2space, 1) # weight 1
-        self.statespace.addSubspace(self.vectorspace, 1) # weight 1
+        self.statespace.addSubspace(self.vectorspace, 0) # weight 0
 
         self.controlspace = oc.RealVectorControlSpace(self.statespace, 2)
         self.controlbounds = ob.RealVectorBounds(2)
@@ -133,14 +149,8 @@ class QCPlan2:
 
         self.si.setPropagationStepSize(1)
         self.si.setMinMaxControlDuration(1, 1)
-        self.si.setDirectedControlSamplerAllocator(oc.DirectedControlSamplerAllocator(self.csampler_alloc))
 
         self.state = ob.State(self.statespace)
-
-        self.tmp_control = self.controlspace.allocControl()
-
-    def csampler_alloc(self, si):
-        return oc.SteeredControlSampler(si)
 
     def loop(self):
         transform = self.input_map.get_transform()
@@ -162,22 +172,6 @@ class QCPlan2:
                 (transform.translation.x - self.last_transform.translation.x) * np.cos(-z) / timestamp_diff
                 - (transform.translation.y - self.last_transform.translation.y) * np.sin(-z) / timestamp_diff
             )
-            #sref[1][1] = (
-                #(transform.translation.y - self.last_transform.translation.y) * np.cos(-z) / timestamp_diff
-                #+ (transform.translation.x - self.last_transform.translation.x) * np.sin(-z) / timestamp_diff
-            #)
-            #rotation_diff = quaternion_multiply(
-                #[transform.rotation.x,
-                 #transform.rotation.y,
-                 #transform.rotation.z,
-                 #transform.rotation.w],
-                 #[self.last_transform.rotation.x,
-                 #self.last_transform.rotation.y,
-                 #self.last_transform.rotation.z,
-                 #-self.last_transform.rotation.w],
-            #)
-            #x, y, z = euler_from_quaternion(rotation_diff)
-            #sref[1][2] = z / timestamp_diff
             self.se2space.setBounds(self.se2bounds)
             self.statespace.enforceBounds(sref)
 
@@ -242,8 +236,7 @@ class QCPlan2:
         print(accelerator, steering)
 
         self.planner = oc.SST(self.si)
-        self.planner.setPruningRadius(0.00)
-        self.planner.setSelectionRadius(0.00)
+        self.planner.setPruningRadius(self.planner.getPruningRadius() / 10)
 
         if solution is not None:
             # Copy old path into a new PathControl (and keep a local reference) because it will be freed on self.ss.clear()
@@ -254,9 +247,7 @@ class QCPlan2:
 
         start_state = ob.State(self.statespace)
         start_state_ref = start_state()
-        self.tmp_control[0] = accelerator
-        self.tmp_control[1] = steering
-        self.propagator.propagate(sref, self.tmp_control, 1, start_state_ref)
+        self.propagator.propagate(sref, (accelerator, steering), 1, start_state_ref)
         self.ss.setStartState(start_state)
 
         goal_state = ob.State(self.statespace)
