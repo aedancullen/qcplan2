@@ -38,17 +38,9 @@ CONTROL0H = 0.25
 CONTROL1L = -1
 CONTROL1H = 1
 
-GRID_LENGTH = 10
-GRID0L = -5
-GRID0H = 5
-GRID1L = -1
-GRID1H = 1
-GRID2L = -5
-GRID2H = 5
-GRID3L = CONTROL0L
-GRID3H = CONTROL0H
-GRID4L = CONTROL1L
-GRID4H = CONTROL1H
+MASS = 1
+WHEELBASE = 1
+PHI_MAX = 1
 
 class InputMap:
     def __init__(self):
@@ -69,6 +61,29 @@ class InputMap:
     def occupancygrid_callback(self, occupancygrid):
         pass
 
+class QCPlanStatePropagator(oc.StatePropagator):
+    def __init__(self, si):
+        super().__init__(si)
+        self.solver = oc.ODEBasicSolver(si, oc.ODE(self.ode))
+        self.odeprop = oc.ODESolver.getStatePropagator(self.solver)
+
+    def propagate(self, state, control, duration, result):
+        self.odeprop.propagate(state, control, duration, result)
+
+    def ode(self, q, u, qdot):
+        print(q)
+        print(u)
+        print(qdot)
+        a = u[0] / MASS
+        s = q[3] + a * CHUNK_DURATION
+        qdot[0] = q[0] + s * np.cos(q[2])
+        qdot[1] = q[1] + s * np.sin(q[2])
+        qdot[2] = q[2] + s / WHEELBASE * np.tan(u[1] * PHI_MAX)
+        qdot[3] = s
+
+    def steer(self, from_state, to_state, result, duration):
+        pass
+
 class QCPlan2:
     def __init__(self, input_map):
         self.input_map = input_map
@@ -78,17 +93,6 @@ class QCPlan2:
         self.last_control = None
 
         self.auto_en = False
-
-        try:
-            with np.load("f_values.npz") as data:
-                self.f_values_x = data["f_values_x"]
-                self.f_values_y = data["f_values_y"]
-                self.f_values_yaw = data["f_values_yaw"]
-                print("Loaded f_values")
-        except:
-            self.f_values_x = np.zeros((GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH))
-            self.f_values_y = np.zeros((GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH))
-            self.f_values_yaw = np.zeros((GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH, GRID_LENGTH))
 
         try:
             self.waypoints = np.loadtxt("waypoints.csv", delimiter=',')
@@ -102,8 +106,8 @@ class QCPlan2:
         self.se2bounds.setHigh(99999)
         self.se2space.setBounds(self.se2bounds)
 
-        self.vectorspace = ob.RealVectorStateSpace(3)
-        self.vectorbounds = ob.RealVectorBounds(3)
+        self.vectorspace = ob.RealVectorStateSpace(1)
+        self.vectorbounds = ob.RealVectorBounds(1)
         self.vectorbounds.setLow(-99999) # don't care
         self.vectorbounds.setHigh(99999)
         self.vectorspace.setBounds(self.vectorbounds)
@@ -114,27 +118,29 @@ class QCPlan2:
 
         self.controlspace = oc.RealVectorControlSpace(self.statespace, 2)
         self.controlbounds = ob.RealVectorBounds(2)
-        self.controlbounds.setLow(0, 0)
+        self.controlbounds.setLow(0, CONTROL0L)
         self.controlbounds.setHigh(0, CONTROL0H)
         self.controlbounds.setLow(1, CONTROL1L)
         self.controlbounds.setHigh(1, CONTROL1H)
         self.controlspace.setBounds(self.controlbounds)
 
         self.ss = oc.SimpleSetup(self.controlspace)
-        self.ss.setStateValidityChecker(ob.StateValidityCheckerFn(self.state_validity_check))
-        self.ss.setStatePropagator(oc.StatePropagatorFn(self.state_propagate))
-
         self.si = self.ss.getSpaceInformation()
+
+        self.propagator = QCPlanStatePropagator(self.si)
+        self.ss.setStatePropagator(self.propagator)
+        self.ss.setStateValidityChecker(ob.StateValidityCheckerFn(self.state_validity_check))
+
         self.si.setPropagationStepSize(1)
         self.si.setMinMaxControlDuration(1, 1)
+        self.si.setDirectedControlSamplerAllocator(oc.DirectedControlSamplerAllocator(self.csampler_alloc))
 
         self.state = ob.State(self.statespace)
-        sref = self.state()
-        sref[1][0] = 0
-        sref[1][1] = 0
-        sref[1][2] = 0
-        self.se2space.setBounds(self.se2bounds)
-        self.statespace.enforceBounds(sref)
+
+        self.tmp_control = self.controlspace.allocControl()
+
+    def csampler_alloc(self, si):
+        return oc.SteeredControlSampler(si)
 
     def loop(self):
         transform = self.input_map.get_transform()
@@ -156,38 +162,24 @@ class QCPlan2:
                 (transform.translation.x - self.last_transform.translation.x) * np.cos(-z) / timestamp_diff
                 - (transform.translation.y - self.last_transform.translation.y) * np.sin(-z) / timestamp_diff
             )
-            sref[1][1] = (
-                (transform.translation.y - self.last_transform.translation.y) * np.cos(-z) / timestamp_diff
-                + (transform.translation.x - self.last_transform.translation.x) * np.sin(-z) / timestamp_diff
-            )
-            rotation_diff = quaternion_multiply(
-                [transform.rotation.x,
-                 transform.rotation.y,
-                 transform.rotation.z,
-                 transform.rotation.w],
-                 [self.last_transform.rotation.x,
-                 self.last_transform.rotation.y,
-                 self.last_transform.rotation.z,
-                 -self.last_transform.rotation.w],
-            )
-            x, y, z = euler_from_quaternion(rotation_diff)
-            sref[1][2] = z / timestamp_diff
+            #sref[1][1] = (
+                #(transform.translation.y - self.last_transform.translation.y) * np.cos(-z) / timestamp_diff
+                #+ (transform.translation.x - self.last_transform.translation.x) * np.sin(-z) / timestamp_diff
+            #)
+            #rotation_diff = quaternion_multiply(
+                #[transform.rotation.x,
+                 #transform.rotation.y,
+                 #transform.rotation.z,
+                 #transform.rotation.w],
+                 #[self.last_transform.rotation.x,
+                 #self.last_transform.rotation.y,
+                 #self.last_transform.rotation.z,
+                 #-self.last_transform.rotation.w],
+            #)
+            #x, y, z = euler_from_quaternion(rotation_diff)
+            #sref[1][2] = z / timestamp_diff
             self.se2space.setBounds(self.se2bounds)
             self.statespace.enforceBounds(sref)
-
-            if self.last_control is not None:
-                d0 = util.discretize(GRID0L, GRID0H, GRID_LENGTH, sref[1][0])
-                d1 = util.discretize(GRID1L, GRID1H, GRID_LENGTH, sref[1][1])
-                d2 = util.discretize(GRID2L, GRID2H, GRID_LENGTH, sref[1][2])
-                d3 = util.discretize(GRID3L, GRID3H, GRID_LENGTH, self.last_control[0])
-                d4 = util.discretize(GRID4L, GRID4H, GRID_LENGTH, self.last_control[1])
-                if d0 is not None and d1 is not None and d2 is not None and d3 is not None and d4 is not None:
-                    #print([d0, d1, d2, d3, d4])
-                    self.f_values_x[d0, d1, d2, d3, d4] = (self.f_values_x[d0, d1, d2, d3, d4] + sref[1][0]) / 2
-                    self.f_values_y[d0, d1, d2, d3, d4] = (self.f_values_y[d0, d1, d2, d3, d4] + sref[1][1]) / 2
-                    self.f_values_yaw[d0, d1, d2, d3, d4] = (self.f_values_yaw[d0, d1, d2, d3, d4] + sref[1][2]) / 2
-                else:
-                    print("Discretized point out of bounds")
 
         gpupdated = gamepadpipe.get_updated()
         gpdata = gamepadpipe.get_data()
@@ -213,9 +205,6 @@ class QCPlan2:
         time.sleep(0.02)
 
         if self.last_gpdata is not None:
-            if gpdata['x'] == 1 and self.last_gpdata['x'] == 0:
-                np.savez("f_values.npz", f_values_x=self.f_values_x, f_values_y=self.f_values_y, f_values_yaw=self.f_values_yaw)
-                print("Saved f_values")
             if gpdata['y'] == 1 and self.last_gpdata['y'] == 0:
                 np.savetxt("waypoints.csv", self.waypoints, delimiter=',')
                 print("Saved waypoints")
@@ -265,7 +254,9 @@ class QCPlan2:
 
         start_state = ob.State(self.statespace)
         start_state_ref = start_state()
-        self.state_propagate(sref, (accelerator, steering), 1, start_state_ref)
+        self.tmp_control[0] = accelerator
+        self.tmp_control[1] = steering
+        self.propagator.propagate(sref, self.tmp_control, 1, start_state_ref)
         self.ss.setStartState(start_state)
 
         goal_state = ob.State(self.statespace)
@@ -292,35 +283,6 @@ class QCPlan2:
 
     def state_validity_check(self, state):
         return self.statespace.satisfiesBounds(state)
-
-    def state_propagate(self, state, control, duration, future_state):
-        print(control[0], control[1])
-        d0 = util.unit_scale(GRID0L, GRID0H, state[1][0])
-        d1 = util.unit_scale(GRID1L, GRID1H, state[1][1])
-        d2 = util.unit_scale(GRID2L, GRID2H, state[1][2])
-        d3 = util.unit_scale(GRID3L, GRID3H, control[0])
-        d4 = util.unit_scale(GRID4L, GRID4H, control[1])
-        data = np.asarray([[d0], [d1], [d2], [d3], [d4]]) * (GRID_LENGTH - 1)
-        #print(data)
-        result_x = map_coordinates(self.f_values_x, data, order=1, mode="nearest")[0]
-        result_y = map_coordinates(self.f_values_y, data, order=1, mode="nearest")[0]
-        result_yaw = map_coordinates(self.f_values_yaw, data, order=1, mode="nearest")[0]
-        future_state[1][0] = result_x
-        future_state[1][1] = result_y
-        future_state[1][2] = result_yaw
-        new_yaw = state[0].getYaw() + result_yaw * CHUNK_DURATION
-        future_state[0].setX(state[0].getX() +
-            result_x * np.cos(new_yaw) * CHUNK_DURATION
-            - result_y * np.sin(new_yaw) * CHUNK_DURATION
-        )
-        future_state[0].setY(state[0].getY() +
-            result_y * np.cos(new_yaw) * CHUNK_DURATION
-            + result_x * np.sin(new_yaw) * CHUNK_DURATION
-        )
-        future_state[0].setYaw(new_yaw)
-        print(state[0].getX(), state[0].getY(), state[1][0], state[1][1], state[1][2])
-        print(future_state[0].getX(), future_state[0].getY(), future_state[1][0], future_state[1][1], future_state[1][2])
-        print()
 
 if __name__ == "__main__":
     rospy.init_node("qcplan2")
