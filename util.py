@@ -55,11 +55,42 @@ def walk_along_trajectory(trajectory, t, i, distance):
     return point_out, angle_out, t_out, i_out
 
 @njit(cache=True)
-def discretize(low, high, length, value):
-    if value < low or value > high:
-        return None
-    return round((value - low) / (high - low) * (length - 1))
+def fast_state_validity_check(np_state, np_laserstate, laserscan, occupancygrid, car_x_dim, car_y_dim):
+    ranges, angle_min, angle_max, angle_increment = laserscan
+    data, resolution, width, height, x, y = occupancygrid
+    for i in range(len(ranges)):
+        dist = ranges[i]
+        angle = np_laserstate[2] + angle_min + i * angle_increment
+        location_x = np_laserstate[0] + dist * np.cos(angle)
+        location_y = np_laserstate[1] + dist * np.sin(angle)
+        bi_x = round((location_x - x) * (1 / resolution))
+        bi_y = round((location_y - y) * (1 / resolution))
+        data[bi_x, bi_y] = 100
 
-@njit(cache=True)
-def unit_scale(low, high, value):
-    return (value - low) / (high - low)
+    direction = np_state[2]
+    step = resolution / 2
+    cos_step = np.cos(direction) * step
+    sin_step = np.sin(direction) * step
+    cos_step_perp = np.cos(direction + np.pi / 2) * step
+    sin_step_perp = np.sin(direction + np.pi / 2) * step
+    trans_x = np_state[0] - np.cos(direction) * car_x_dim / 2
+    trans_y = np_state[1] - np.sin(direction) * car_x_dim / 2
+    dist = 0
+    while dist <= car_x_dim:
+        trans_x_perp = 0
+        trans_y_perp = 0
+        dist_perp = 0
+        while dist_perp <= car_y_dim / 2:
+            x1 = round((trans_x + trans_x_perp - x) * (1 / resolution))
+            y1 = round((trans_y + trans_y_perp - y) * (1 / resolution))
+            x2 = round((trans_x - trans_x_perp - x) * (1 / resolution))
+            y2 = round((trans_y - trans_y_perp - y) * (1 / resolution))
+            if data[x1, y1] >= 50 or data[x2, y2] >= 50:
+                return False
+            trans_x_perp += cos_step_perp
+            trans_y_perp += sin_step_perp
+            dist_perp += step
+        trans_x += cos_step
+        trans_y += sin_step
+        dist += step
+    return True

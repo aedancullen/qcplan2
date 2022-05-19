@@ -44,12 +44,18 @@ MASS = 0.1
 WHEELBASE = 0.324
 PHI_MAX = 0.785
 
+CAR_X_DIM = 0.8
+CAR_Y_DIM = 0.5
+
 class InputMap:
     def __init__(self):
         self.transform_buffer = tf2_ros.Buffer()
         self.transform_listener = tf2_ros.TransformListener(self.transform_buffer)
         self.laserscan_sub = rospy.Subscriber('/scan', LaserScan, self.laserscan_callback)
         self.occupancygrid_sub = rospy.Subscriber("/map", OccupancyGrid, self.occupancygrid_callback)
+
+        self.laserscan = None
+        self.occupancygrid = None
 
     def get_transform(self):
         try:
@@ -58,10 +64,22 @@ class InputMap:
             return None
 
     def laserscan_callback(self, laserscan):
-        pass
+        self.laserscan = (
+            np.array(laserscan.ranges),
+            laserscan.angle_min,
+            laserscan.angle_max,
+            laserscan.angle_increment,
+        )
 
     def occupancygrid_callback(self, occupancygrid):
-        pass
+        self.occupancygrid = (
+            np.array(occupancygrid.data, dtype=np.int8).reshape(occupancygrid.info.height, occupancygrid.info.width),
+            occupancygrid.info.resolution,
+            occupancygrid.info.width,
+            occupancygrid.info.height,
+            occupancygrid.info.origin.translation.x,
+            occupancygrid.info.origin.translation.y,
+        )
 
 class QCPlanStatePropagator(oc.StatePropagator):
     def __init__(self, si, statespace):
@@ -276,7 +294,21 @@ class QCPlan2:
         return accelerator, steering
 
     def state_validity_check(self, state):
-        return self.statespace.satisfiesBounds(state)
+        if not self.statespace.satisfiesBounds(state):
+            return False
+        np_state = np.array([state[0].getX(), state[0].getY(), state[0].getYaw()])
+        np_laserstate = np.array([self.state[0].getX(), self.state[0].getY(), self.state[0].getYaw()])
+        if self.input_map.laserscan is not None and self.input_map.occupancygrid is not None:
+            return util.fast_state_validity_check(
+                np_state,
+                np_laserstate,
+                self.input_map.laserscan,
+                self.input_map.occupancygrid,
+                CAR_X_DIM,
+                CAR_Y_DIM,
+            )
+        else:
+            return True
 
 if __name__ == "__main__":
     rospy.init_node("qcplan2")
