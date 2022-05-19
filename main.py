@@ -73,13 +73,13 @@ class QCPlanStatePropagator(oc.StatePropagator):
             result[0].setYaw(yaw)
         else:
             radius = WHEELBASE / np.tan(-control[1] * PHI_MAX)
-            curofs_x = radius * np.cos(yaw)
-            curofs_y = radius * np.sin(yaw)
+            curofs_x = radius * np.sin(yaw)
+            curofs_y = -(radius * np.cos(yaw))
             center_x = state[0].getX() - curofs_x
             center_y = state[0].getY() - curofs_y
             traveled_angle = distance / radius
-            newofs_x = radius * np.cos(yaw + traveled_angle)
-            newofs_y = radius * np.sin(yaw + traveled_angle)
+            newofs_x = radius * np.sin(yaw + traveled_angle)
+            newofs_y = -(radius * np.cos(yaw + traveled_angle))
             result[0].setX(center_x + newofs_x)
             result[0].setY(center_y + newofs_y)
             result[0].setYaw(yaw + traveled_angle)
