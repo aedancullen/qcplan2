@@ -58,14 +58,18 @@ def walk_along_trajectory(trajectory, t, i, distance):
 def fast_state_validity_check(np_state, np_laserstate, laserscan, occupancygrid, car_x_dim, car_y_dim):
     ranges, angle_min, angle_max, angle_increment = laserscan
     data, resolution, width, height, x, y = occupancygrid
+
+    cells_per = 1 / resolution
+
     for i in range(len(ranges)):
         dist = ranges[i]
         angle = np_laserstate[2] + angle_min + i * angle_increment
         location_x = np_laserstate[0] + dist * np.cos(angle)
         location_y = np_laserstate[1] + dist * np.sin(angle)
-        bi_x = round((location_x - x) * (1 / resolution))
-        bi_y = round((location_y - y) * (1 / resolution))
-        data[bi_y, bi_x] = 100
+        bi_x = round((location_x - x) * cells_per)
+        bi_y = round((location_y - y) * cells_per)
+        if bi_x >= 0 and bi_x < width and bi_y >= 0 and bi_y < height:
+            data[bi_y, bi_x] = 100
 
     direction = np_state[2]
     step = resolution / 2
@@ -81,10 +85,10 @@ def fast_state_validity_check(np_state, np_laserstate, laserscan, occupancygrid,
         trans_y_perp = 0
         dist_perp = 0
         while dist_perp <= car_y_dim / 2:
-            x1 = round((trans_x + trans_x_perp - x) * (1 / resolution))
-            y1 = round((trans_y + trans_y_perp - y) * (1 / resolution))
-            x2 = round((trans_x - trans_x_perp - x) * (1 / resolution))
-            y2 = round((trans_y - trans_y_perp - y) * (1 / resolution))
+            x1 = round((trans_x + trans_x_perp - x) * cells_per)
+            y1 = round((trans_y + trans_y_perp - y) * cells_per)
+            x2 = round((trans_x - trans_x_perp - x) * cells_per)
+            y2 = round((trans_y - trans_y_perp - y) * cells_per)
             if data[y1, x1] >= 50 or data[y2, x2] >= 50:
                 return False
             trans_x_perp += cos_step_perp

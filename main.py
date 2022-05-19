@@ -77,8 +77,8 @@ class InputMap:
             occupancygrid.info.resolution,
             occupancygrid.info.width,
             occupancygrid.info.height,
-            occupancygrid.info.origin.translation.x,
-            occupancygrid.info.origin.translation.y,
+            occupancygrid.info.origin.position.x,
+            occupancygrid.info.origin.position.y,
         )
 
 class QCPlanStatePropagator(oc.StatePropagator):
@@ -294,10 +294,14 @@ class QCPlan2:
         return accelerator, steering
 
     def state_validity_check(self, state):
+        sref = self.state()
+
         if not self.statespace.satisfiesBounds(state):
             return False
+
         np_state = np.array([state[0].getX(), state[0].getY(), state[0].getYaw()])
-        np_laserstate = np.array([self.state[0].getX(), self.state[0].getY(), self.state[0].getYaw()])
+        np_laserstate = np.array([sref[0].getX(), sref[0].getY(), sref[0].getYaw()])
+
         if self.input_map.laserscan is not None and self.input_map.occupancygrid is not None:
             return util.fast_state_validity_check(
                 np_state,
