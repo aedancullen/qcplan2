@@ -89,7 +89,7 @@ def fast_state_validity_check(np_state, np_laserstate, laserscan, occupancygrid,
             y1 = round((trans_y + trans_y_perp - y) * cells_per)
             x2 = round((trans_x - trans_x_perp - x) * cells_per)
             y2 = round((trans_y - trans_y_perp - y) * cells_per)
-            if data[y1, x1] >= 50 or data[y2, x2] >= 50:
+            if data[y1, x1] >= 10 or data[y2, x2] >= 10:
                 return False
             trans_x_perp += cos_step_perp
             trans_y_perp += sin_step_perp

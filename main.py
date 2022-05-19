@@ -72,8 +72,9 @@ class InputMap:
         )
 
     def occupancygrid_callback(self, occupancygrid):
+        data = np.array(occupancygrid.data, dtype=np.int8).reshape(occupancygrid.info.height, occupancygrid.info.width)
         self.occupancygrid = (
-            np.array(occupancygrid.data, dtype=np.int8).reshape(occupancygrid.info.height, occupancygrid.info.width),
+            np.ma.array(data, mask=data==-1, fill_value=-1),
             occupancygrid.info.resolution,
             occupancygrid.info.width,
             occupancygrid.info.height,
