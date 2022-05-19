@@ -29,7 +29,7 @@ import util
 
 ou.setLogLevel(ou.LOG_INFO)
 
-CHUNK_DURATION = 0.2
+CHUNK_DURATION = 0.1
 CHUNK_DISTANCE = 5
 GOAL_THRESHOLD = 1
 GOAL_SPEED = 1
@@ -39,7 +39,7 @@ CONTROL0H = 0.25
 CONTROL1L = -1
 CONTROL1H = 1
 
-F_OFS = 0
+FOFS = 0
 MASS = 0.1
 WHEELBASE = 0.324
 PHI_MAX = 0.785
@@ -64,8 +64,12 @@ class InputMap:
         pass
 
 class QCPlanStatePropagator(oc.StatePropagator):
+    def __init__(self, si, statespace):
+        super().__init__(si)
+        self.statespace = statespace
+
     def propagate(self, state, control, duration, result):
-        a = (control[0] + F_OFS) / MASS
+        a = (control[0] + FOFS) / MASS
         s = state[1][0] + a * CHUNK_DURATION
         distance = s * CHUNK_DURATION
         yaw = state[0].getYaw()
@@ -110,8 +114,6 @@ class QCPlan2:
         self.last_gpdata = None
         self.last_control = None
 
-        self.auto_en = False
-
         try:
             self.waypoints = np.loadtxt("waypoints.csv", delimiter=',')
             print("Loaded waypoints")
@@ -131,8 +133,8 @@ class QCPlan2:
         self.vectorspace.setBounds(self.vectorbounds)
 
         self.statespace = ob.CompoundStateSpace()
-        self.statespace.addSubspace(self.se2space, 1) # weight 1
-        self.statespace.addSubspace(self.vectorspace, 1) # weight 1
+        self.statespace.addSubspace(self.se2space, 1)
+        self.statespace.addSubspace(self.vectorspace, 0)
 
         self.controlspace = oc.RealVectorControlSpace(self.statespace, 2)
         self.controlbounds = ob.RealVectorBounds(2)
@@ -145,7 +147,7 @@ class QCPlan2:
         self.ss = oc.SimpleSetup(self.controlspace)
         self.si = self.ss.getSpaceInformation()
 
-        self.propagator = QCPlanStatePropagator(self.si)
+        self.propagator = QCPlanStatePropagator(self.si, self.statespace)
         self.ss.setStatePropagator(self.propagator)
         self.ss.setStateValidityChecker(ob.StateValidityCheckerFn(self.state_validity_check))
 
@@ -174,22 +176,16 @@ class QCPlan2:
                 (transform.translation.x - self.last_transform.translation.x) * np.cos(-z) / timestamp_diff
                 - (transform.translation.y - self.last_transform.translation.y) * np.sin(-z) / timestamp_diff
             )
-            self.se2space.setBounds(self.se2bounds)
-            self.statespace.enforceBounds(sref)
 
         gpupdated = gamepadpipe.get_updated()
         gpdata = gamepadpipe.get_data()
         if gpdata is None:
             return -1
 
-        if self.auto_en:
+        if gpdata['a'] == 1:
             control = self.mode_auto(gpupdated, gpdata)
-            if gpdata['a'] == 0:
-                self.auto_en = False
         else:
             control = self.mode_teleop(gpupdated, gpdata)
-            if gpdata['a'] == 1:
-                self.auto_en = True
 
         self.last_transform = copy.copy(transform)
         self.last_timestamp = copy.copy(timestamp)
@@ -201,14 +197,14 @@ class QCPlan2:
         time.sleep(0.02)
 
         if self.last_gpdata is not None:
-            if gpdata['y'] == 1 and self.last_gpdata['y'] == 0:
-                np.savetxt("waypoints.csv", self.waypoints, delimiter=',')
-                print("Saved waypoints")
-            if gpdata['b'] == 1 and self.last_gpdata['b'] == 0:
+            if gpdata['x'] == 1 and self.last_gpdata['x'] == 0:
                 sref = self.state()
                 to_append = np.array([(sref[0].getX(), sref[0].getY())])
                 self.waypoints = np.append(self.waypoints, to_append, 0)
                 print("Appended waypoint")
+            if gpdata['y'] == 1 and self.last_gpdata['y'] == 0:
+                np.savetxt("waypoints.csv", self.waypoints, delimiter=',')
+                print("Saved waypoints")
 
         if gpupdated:
             accelerator = -gpdata["left_stick_y"] * 0.25
@@ -238,6 +234,7 @@ class QCPlan2:
         print(accelerator, steering)
 
         self.planner = oc.SST(self.si)
+        self.planner.setGoalBias(0.5)
         self.planner.setPruningRadius(self.planner.getPruningRadius() / 10)
 
         if solution is not None:
@@ -250,7 +247,6 @@ class QCPlan2:
         start_state = ob.State(self.statespace)
         start_state_ref = start_state()
         self.propagator.propagate(sref, (accelerator, steering), 1, start_state_ref)
-        self.ss.setStartState(start_state)
 
         goal_state = ob.State(self.statespace)
         goal_state_ref = goal_state()
@@ -261,7 +257,6 @@ class QCPlan2:
         goal_state_ref[0].setY(goal_point[1])
         goal_state_ref[0].setYaw(goal_angle)
         goal_state_ref[1][0] = GOAL_SPEED
-        self.ss.setGoalState(goal_state, GOAL_THRESHOLD)
 
         self.se2bounds = ob.RealVectorBounds(2)
         self.se2bounds.setLow(0, min(goal_point[0], start_point[0]) - CHUNK_DISTANCE / 2)
@@ -269,6 +264,11 @@ class QCPlan2:
         self.se2bounds.setHigh(0, max(goal_point[0], start_point[0]) + CHUNK_DISTANCE / 2)
         self.se2bounds.setHigh(1, max(goal_point[1], start_point[1]) + CHUNK_DISTANCE / 2)
         self.se2space.setBounds(self.se2bounds)
+
+        self.statespace.enforceBounds(start_state_ref)
+        self.statespace.enforceBounds(goal_state_ref)
+        self.ss.setStartState(start_state)
+        self.ss.setGoalState(goal_state, GOAL_THRESHOLD)
 
         self.ss.setPlanner(self.planner)
         self.ss.solve(CHUNK_DURATION)
