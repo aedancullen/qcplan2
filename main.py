@@ -29,15 +29,17 @@ import util
 
 ou.setLogLevel(ou.LOG_INFO)
 
-CHUNK_DURATION = 0.1
-CHUNK_DISTANCE = 2
+CHUNK_DURATION = 0.2
+CHUNK_DISTANCE = 5
 GOAL_THRESHOLD = 1
+GOAL_SPEED = 1
 
 CONTROL0L = -0.25
 CONTROL0H = 0.25
 CONTROL1L = -1
 CONTROL1H = 1
 
+F_OFS = 0
 MASS = 0.1
 WHEELBASE = 0.324
 PHI_MAX = 0.785
@@ -63,11 +65,11 @@ class InputMap:
 
 class QCPlanStatePropagator(oc.StatePropagator):
     def propagate(self, state, control, duration, result):
-        a = control[0] / MASS
+        a = (control[0] + F_OFS) / MASS
         s = state[1][0] + a * CHUNK_DURATION
         distance = s * CHUNK_DURATION
         yaw = state[0].getYaw()
-        if np.abs(control[1]) < 0.1:
+        if control[1] == 0:
             result[0].setX(state[0].getX() + distance * np.cos(yaw))
             result[0].setY(state[0].getY() + distance * np.sin(yaw))
             result[0].setYaw(yaw)
@@ -130,7 +132,7 @@ class QCPlan2:
 
         self.statespace = ob.CompoundStateSpace()
         self.statespace.addSubspace(self.se2space, 1) # weight 1
-        self.statespace.addSubspace(self.vectorspace, 0) # weight 0
+        self.statespace.addSubspace(self.vectorspace, 1) # weight 1
 
         self.controlspace = oc.RealVectorControlSpace(self.statespace, 2)
         self.controlbounds = ob.RealVectorBounds(2)
@@ -258,6 +260,7 @@ class QCPlan2:
         goal_state_ref[0].setX(goal_point[0])
         goal_state_ref[0].setY(goal_point[1])
         goal_state_ref[0].setYaw(goal_angle)
+        goal_state_ref[1][0] = GOAL_SPEED
         self.ss.setGoalState(goal_state, GOAL_THRESHOLD)
 
         self.se2bounds = ob.RealVectorBounds(2)
