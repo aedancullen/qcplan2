@@ -130,10 +130,14 @@ class QCPlanStatePropagator(oc.StatePropagator):
 class QCPlan2:
     def __init__(self, input_map):
         self.input_map = input_map
+
+        self.last_auto_en = None
         self.last_transform = None
         self.last_timestamp = None
         self.last_gpdata = None
         self.last_control = None
+
+        self.auto_en = False
 
         try:
             self.waypoints = np.loadtxt("waypoints.csv", delimiter=',')
@@ -219,10 +223,16 @@ class QCPlan2:
             return -1
 
         if gpdata['a'] == 1:
+            self.auto_en = True
+        if gpdata['b'] == 1:
+            self.auto_en = False
+
+        if self.auto_en:
             control = self.mode_auto(gpupdated, gpdata)
         else:
             control = self.mode_teleop(gpupdated, gpdata)
 
+        self.last_auto_en = self.auto_en
         self.last_transform = copy.copy(transform)
         self.last_timestamp = copy.copy(timestamp)
         self.last_gpdata = copy.copy(gpdata)
@@ -253,7 +263,7 @@ class QCPlan2:
     def mode_auto(self, gpupdated, gpdata):
         sref = self.state()
 
-        if self.ss.getLastPlannerStatus():
+        if self.ss.getLastPlannerStatus() and self.last_auto_en:
             print("Solved")
             solution = self.ss.getSolutionPath()
             controls = solution.getControls()
