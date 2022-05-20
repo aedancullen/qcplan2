@@ -30,9 +30,11 @@ import util
 ou.setLogLevel(ou.LOG_INFO)
 
 CHUNK_DURATION = 0.1
-CHUNK_DISTANCE = 5
-GOAL_THRESHOLD = 1
+CHUNK_DISTANCE = 1
+GOAL_THRESHOLD = 0.25
 GOAL_SPEED = 1
+
+GPACCEL_SCALE = 0.25
 
 CONTROL0L = -0.25
 CONTROL0H = 0.25
@@ -42,7 +44,7 @@ CONTROL1H = 1
 FOFS = 0
 MASS = 0.1
 WHEELBASE = 0.324
-PHI_MAX = 0.785
+PHI_MAX = 0.524
 
 CAR_X_DIM = 0.8
 CAR_Y_DIM = 0.5
@@ -175,13 +177,17 @@ class QCPlan2:
 
         self.state = ob.State(self.statespace)
 
+        self.latched_laserscan = None
+        self.latched_occupancygrid = None
+
     def loop(self):
+        sref = self.state()
+
         transform = self.input_map.get_transform()
         timestamp = rospy.Time.now()
 
         if transform is not None and self.last_transform is not None and timestamp is not None and self.last_timestamp is not None:
             timestamp_diff = (timestamp - self.last_timestamp).to_sec()
-            sref = self.state()
             sref[0].setX(transform.translation.x)
             sref[0].setY(transform.translation.y)
             x, y, z = euler_from_quaternion([
@@ -194,6 +200,17 @@ class QCPlan2:
             sref[1][0] = (
                 (transform.translation.x - self.last_transform.translation.x) * np.cos(-z) / timestamp_diff
                 - (transform.translation.y - self.last_transform.translation.y) * np.sin(-z) / timestamp_diff
+            )
+
+        self.latched_laserscan = input_map.laserscan
+        self.latched_occupancygrid = input_map.occupancygrid
+
+        if self.latched_laserscan is not None and self.latched_occupancygrid is not None:
+            np_laserstate = np.array([sref[0].getX(), sref[0].getY(), sref[0].getYaw()])
+            util.scan_overlay(
+                np_laserstate,
+                self.latched_laserscan,
+                self.latched_occupancygrid,
             )
 
         gpupdated = gamepadpipe.get_updated()
@@ -226,7 +243,7 @@ class QCPlan2:
                 print("Saved waypoints")
 
         if gpupdated:
-            accelerator = -gpdata["left_stick_y"] * 0.25
+            accelerator = -gpdata["left_stick_y"] * GPACCEL_SCALE
             steering = gpdata["right_stick_x"]
             maestrocar.set_control(accelerator, steering)
             return accelerator, steering
@@ -300,15 +317,14 @@ class QCPlan2:
         if not self.statespace.satisfiesBounds(state):
             return False
 
-        np_state = np.array([state[0].getX(), state[0].getY(), state[0].getYaw()])
-        np_laserstate = np.array([sref[0].getX(), sref[0].getY(), sref[0].getYaw()])
-
-        if self.input_map.laserscan is not None and self.input_map.occupancygrid is not None:
-            return util.fast_state_validity_check(
+        if self.latched_laserscan is not None and self.latched_occupancygrid is not None:
+            np_state = np.array([state[0].getX(), state[0].getY(), state[0].getYaw()])
+            np_laserstate = np.array([sref[0].getX(), sref[0].getY(), sref[0].getYaw()])
+            return util.state_validity_check(
                 np_state,
                 np_laserstate,
-                self.input_map.laserscan,
-                self.input_map.occupancygrid,
+                self.latched_laserscan,
+                self.latched_occupancygrid,
                 CAR_X_DIM,
                 CAR_Y_DIM,
             )
