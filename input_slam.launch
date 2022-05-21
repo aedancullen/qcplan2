@@ -7,9 +7,11 @@
     <param name="cam1_topic" value="/cam1/image_raw" />
     <param name="calib_file" value="$(arg calib_file)" />
     <rosparam file="$(find svo_ros)/param/pinhole.yaml" />
-    <param name="grid_size" value="20" />
+    <param name="grid_size" value="25" />
     <param name="pipeline_is_stereo" value="true" />
     <param name="automatic_reinitialization" value="true" />
+    <param name="scan_epi_unit_sphere" value="true" />
+    <param name="poseoptim_using_unit_sphere" value="true" />
     <param name="use_imu" value="false" />
     <param name="poseoptim_prior_lambda" value="0.0" />
     <param name="img_align_prior_lambda_rot" value="0.0" />
@@ -24,8 +26,6 @@
 
   <node pkg="slam_toolbox" type="async_slam_toolbox_node" name="slam_toolbox" output="screen">
     <rosparam file="$(find slam_toolbox)/config/mapper_params_online_async.yaml" />
-    <param name="minimum_travel_distance" value="0.20" />
-    <param name="minimum_travel_heading" value="0.20" />
     <param name="base_frame" value="laser" />
     <param name="map_file_name" value="../qcplan2/serialized_map" />
     <param name="map_start_at_dock" value="true" />

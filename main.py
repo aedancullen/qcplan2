@@ -28,12 +28,13 @@ import util
 
 ou.setLogLevel(ou.LOG_INFO)
 
-GPACCEL_SCALE = 0.25
+GP_DURATION = 0.02
+GPACCEL = 0.25
 
-CHUNK_DURATION = 0.1
+CHUNK_DURATION = 0.2
 CHUNK_DISTANCE = 2
 GOAL_THRESHOLD = 0.5
-GOAL_SPEED = 1
+GOAL_BIAS = 0.5
 
 SPEEDL = -10
 SPEEDH = 10
@@ -43,7 +44,7 @@ CONTROL0H = 0.25
 CONTROL1L = -1
 CONTROL1H = 1
 
-MASS = 0.05
+MASS = 0.1
 COAST_THRESH = 0.1
 COAST_EQUIV = 0.025
 WHEELBASE = 0.324
@@ -172,7 +173,7 @@ class QCPlan2:
 
         self.statespace = ob.CompoundStateSpace()
         self.statespace.addSubspace(self.se2space, 1)
-        self.statespace.addSubspace(self.vectorspace, 1)
+        self.statespace.addSubspace(self.vectorspace, 0)
 
         self.controlspace = oc.RealVectorControlSpace(self.statespace, 2)
         self.controlbounds = ob.RealVectorBounds(2)
@@ -253,7 +254,7 @@ class QCPlan2:
         return 0
 
     def mode_teleop(self, gpupdated, gpdata):
-        time.sleep(0.02)
+        time.sleep(GP_DURATION)
 
         if self.last_gpdata is not None:
             if gpdata['x'] == 1 and self.last_gpdata['x'] == 0:
@@ -266,7 +267,7 @@ class QCPlan2:
                 print("Saved waypoints")
 
         if gpupdated:
-            accelerator = -gpdata["left_stick_y"] * GPACCEL_SCALE
+            accelerator = -gpdata["left_stick_y"] * GPACCEL
             steering = gpdata["right_stick_x"]
             maestrocar.set_control(accelerator, steering)
             return accelerator, steering
@@ -276,7 +277,7 @@ class QCPlan2:
     def mode_auto(self, gpupdated, gpdata):
         sref = self.state()
 
-        if self.ss.getLastPlannerStatus() and self.last_auto_en:
+        if self.ss.haveExactSolutionPath() and self.last_auto_en:
             print("Solved")
             solution = self.ss.getSolutionPath()
             controls = solution.getControls()
@@ -293,7 +294,7 @@ class QCPlan2:
         print(accelerator, steering)
 
         self.planner = oc.SST(self.si)
-        self.planner.setGoalBias(0.5)
+        self.planner.setGoalBias(GOAL_BIAS)
         self.planner.setPruningRadius(self.planner.getPruningRadius() / 10)
 
         if solution is not None:
@@ -315,7 +316,6 @@ class QCPlan2:
         goal_state_ref[0].setX(goal_point[0])
         goal_state_ref[0].setY(goal_point[1])
         goal_state_ref[0].setYaw(goal_angle)
-        goal_state_ref[1][0] = GOAL_SPEED
 
         self.se2bounds = ob.RealVectorBounds(2)
         self.se2bounds.setLow(0, min(goal_point[0], start_point[0]) - CHUNK_DISTANCE / 2)
