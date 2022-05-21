@@ -20,8 +20,12 @@
 
   <node pkg="tf2_ros" type="static_transform_publisher" name="orient_laser" output="screen" args="0 0 0 1.5708 -1.5708 0 cam_pos laser" />
 
+  <node pkg="tf2_ros" type="static_transform_publisher" name="offset_rearaxle" output="screen" args="-0.324 0 0 0 0 0 laser rearaxle" />
+
   <node pkg="slam_toolbox" type="async_slam_toolbox_node" name="slam_toolbox" output="screen">
     <rosparam file="$(find slam_toolbox)/config/mapper_params_online_async.yaml" />
+    <param name="minimum_travel_distance" value="0.20" />
+    <param name="minimum_travel_heading" value="0.20" />
     <param name="base_frame" value="laser" />
     <param name="map_file_name" value="../qcplan2/serialized_map" />
     <param name="map_start_at_dock" value="true" />

@@ -6,7 +6,6 @@ import sys
 import os
 
 import numpy as np
-from scipy.ndimage import map_coordinates
 
 import maestrocar
 
@@ -29,25 +28,29 @@ import util
 
 ou.setLogLevel(ou.LOG_INFO)
 
+GPACCEL_SCALE = 0.25
+
 CHUNK_DURATION = 0.1
-CHUNK_DISTANCE = 1
-GOAL_THRESHOLD = 0.25
+CHUNK_DISTANCE = 2
+GOAL_THRESHOLD = 0.5
 GOAL_SPEED = 1
 
-GPACCEL_SCALE = 0.25
+SPEEDL = -10
+SPEEDH = 10
 
 CONTROL0L = -0.25
 CONTROL0H = 0.25
 CONTROL1L = -1
 CONTROL1H = 1
 
-FOFS = 0
-MASS = 0.1
+MASS = 0.05
+COAST_THRESH = 0.1
+COAST_EQUIV = 0.025
 WHEELBASE = 0.324
 PHI_MAX = 0.524
 
-CAR_X_DIM = 0.8
-CAR_Y_DIM = 0.5
+CAR_X_DIM = 0.6
+CAR_Y_DIM = 0.4
 
 class InputMap:
     def __init__(self):
@@ -61,7 +64,7 @@ class InputMap:
 
     def get_transform(self):
         try:
-            return self.transform_buffer.lookup_transform("map", "laser", rospy.Time(0)).transform
+            return self.transform_buffer.lookup_transform("map", "rearaxle", rospy.Time(0)).transform
         except:
             return None
 
@@ -90,10 +93,18 @@ class QCPlanStatePropagator(oc.StatePropagator):
         self.statespace = statespace
 
     def propagate(self, state, control, duration, result):
-        a = (control[0] + FOFS) / MASS
+        if np.abs(control[0]) < COAST_THRESH:
+            if state[1][0] > 0:
+                a = -COAST_EQUIV / MASS
+            else:
+                a = COAST_EQUIV / MASS
+        else:
+            a = control[0] / MASS
+
         s = state[1][0] + a * CHUNK_DURATION
         distance = s * CHUNK_DURATION
         yaw = state[0].getYaw()
+
         if control[1] == 0:
             result[0].setX(state[0].getX() + distance * np.cos(yaw))
             result[0].setY(state[0].getY() + distance * np.sin(yaw))
@@ -121,10 +132,12 @@ class QCPlanStatePropagator(oc.StatePropagator):
         angle = np.arcsin(np.sin(rel))
         result[1] = -angle / PHI_MAX
         result[1] = min(max(result[1], CONTROL1L), CONTROL1H)
+
         if np.cos(rel) > 0:
             result[0] = np.random.uniform(0, CONTROL0H)
         else:
             result[0] = np.random.uniform(CONTROL0L, 0)
+
         return True
 
 class QCPlan2:
@@ -153,13 +166,13 @@ class QCPlan2:
 
         self.vectorspace = ob.RealVectorStateSpace(1)
         self.vectorbounds = ob.RealVectorBounds(1)
-        self.vectorbounds.setLow(-99999) # don't care
-        self.vectorbounds.setHigh(99999)
+        self.vectorbounds.setLow(SPEEDL)
+        self.vectorbounds.setHigh(SPEEDH)
         self.vectorspace.setBounds(self.vectorbounds)
 
         self.statespace = ob.CompoundStateSpace()
         self.statespace.addSubspace(self.se2space, 1)
-        self.statespace.addSubspace(self.vectorspace, 0)
+        self.statespace.addSubspace(self.vectorspace, 1)
 
         self.controlspace = oc.RealVectorControlSpace(self.statespace, 2)
         self.controlbounds = ob.RealVectorBounds(2)

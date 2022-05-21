@@ -94,8 +94,8 @@ def state_validity_check(np_state, np_laserstate, laserscan, occupancygrid, car_
     sin_step = np.sin(direction) * step
     cos_step_perp = np.cos(direction + np.pi / 2) * step
     sin_step_perp = np.sin(direction + np.pi / 2) * step
-    trans_x = np_state[0] - np.cos(direction) * car_x_dim / 2
-    trans_y = np_state[1] - np.sin(direction) * car_x_dim / 2
+    trans_x = np_state[0]
+    trans_y = np_state[1]
     dist = 0
     while dist <= car_x_dim:
         trans_x_perp = 0
