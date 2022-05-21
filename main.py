@@ -50,8 +50,10 @@ COAST_EQUIV = 0.025
 WHEELBASE = 0.324
 PHI_MAX = 0.524
 
-CAR_X_DIM = 0.6
-CAR_Y_DIM = 0.4
+CAR_X_DIM = 0.45
+CAR_Y_DIM = 0.30
+CAR_X_EXTRA = 0.25
+CAR_Y_EXTRA = 0.25
 
 class InputMap:
     def __init__(self):
@@ -152,6 +154,8 @@ class QCPlan2:
         self.last_control = None
 
         self.auto_en = False
+
+        self.extra_en = False
 
         try:
             self.waypoints = np.loadtxt("waypoints.csv", delimiter=',')
@@ -345,6 +349,9 @@ class QCPlan2:
         self.ss.setStartState(start_state)
         self.ss.setGoal(goal_space)
 
+        self.extra_en = True
+        self.extra_en = self.state_validity_check(start_state_ref)
+
         self.ss.setPlanner(self.planner)
         self.ss.solve(CHUNK_DURATION)
 
@@ -364,8 +371,8 @@ class QCPlan2:
                 np_laserstate,
                 self.latched_laserscan,
                 self.latched_occupancygrid,
-                CAR_X_DIM,
-                CAR_Y_DIM,
+                CAR_X_DIM + CAR_X_EXTRA if self.extra_en else CAR_X_DIM,
+                CAR_Y_DIM + CAR_Y_EXTRA if self.extra_en else CAR_Y_DIM,
             )
         else:
             return True
