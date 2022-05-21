@@ -173,7 +173,7 @@ class QCPlan2:
 
         self.statespace = ob.CompoundStateSpace()
         self.statespace.addSubspace(self.se2space, 1)
-        self.statespace.addSubspace(self.vectorspace, 0)
+        self.statespace.addSubspace(self.vectorspace, 1)
 
         self.controlspace = oc.RealVectorControlSpace(self.statespace, 2)
         self.controlbounds = ob.RealVectorBounds(2)
@@ -308,14 +308,31 @@ class QCPlan2:
         start_state_ref = start_state()
         self.propagator.propagate(sref, (accelerator, steering), 1, start_state_ref)
 
-        goal_state = ob.State(self.statespace)
-        goal_state_ref = goal_state()
         start_point = np.array([start_state_ref[0].getX(), start_state_ref[0].getY()])
         nearest_point, nearest_dist, t, i = util.nearest_point_on_trajectory(start_point, self.waypoints)
         goal_point, goal_angle, t, i = util.walk_along_trajectory(self.waypoints, t, i, CHUNK_DISTANCE)
-        goal_state_ref[0].setX(goal_point[0])
-        goal_state_ref[0].setY(goal_point[1])
-        goal_state_ref[0].setYaw(goal_angle)
+
+        goal_se2space = ob.SE2StateSpace()
+        goal_se2bounds = ob.RealVectorBounds(2)
+        goal_se2bounds.setLow(0, goal_point[0] - GOAL_THRESHOLD)
+        goal_se2bounds.setHigh(0, goal_point[0] + GOAL_THRESHOLD)
+        goal_se2bounds.setLow(1, goal_point[1] - GOAL_THRESHOLD)
+        goal_se2bounds.setHigh(1, goal_point[1] + GOAL_THRESHOLD)
+        goal_se2space.setBounds(goal_se2bounds)
+
+        goal_vectorspace = ob.RealVectorStateSpace(1)
+        goal_vectorbounds = ob.RealVectorBounds(1)
+        goal_vectorbounds.setLow(-99999) # don't care
+        goal_vectorbounds.setHigh(99999)
+        goal_vectorspace.setBounds(goal_vectorbounds)
+
+        goal_statespace = ob.CompoundStateSpace()
+        goal_statespace.addSubspace(goal_se2space, 1)
+        goal_statespace.addSubspace(goal_vectorspace, 1)
+
+        goal_si = ob.SpaceInformation(goal_statespace)
+        goal_space = ob.GoalSpace(goal_si)
+        goal_space.setSpace(goal_statespace)
 
         self.se2bounds = ob.RealVectorBounds(2)
         self.se2bounds.setLow(0, min(goal_point[0], start_point[0]) - CHUNK_DISTANCE / 2)
@@ -325,9 +342,8 @@ class QCPlan2:
         self.se2space.setBounds(self.se2bounds)
 
         self.statespace.enforceBounds(start_state_ref)
-        self.statespace.enforceBounds(goal_state_ref)
         self.ss.setStartState(start_state)
-        self.ss.setGoalState(goal_state, GOAL_THRESHOLD)
+        self.ss.setGoal(goal_space)
 
         self.ss.setPlanner(self.planner)
         self.ss.solve(CHUNK_DURATION)
