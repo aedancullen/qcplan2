@@ -47,6 +47,10 @@ CONTROL1H = 1
 MASS = 0.1
 COAST_THRESH = 0.1
 COAST_EQUIV = 0.025
+
+SPEED_REAL = 1
+SPEED_INIT = 0.1
+SPEED_STEP = 0.05
 WHEELBASE = 0.324
 PHI_MAX = 0.524
 
@@ -96,15 +100,15 @@ class QCPlanStatePropagator(oc.StatePropagator):
         self.statespace = statespace
 
     def propagate(self, state, control, duration, result):
-        if np.abs(control[0]) < COAST_THRESH:
-            if state[1][0] > 0:
-                a = -COAST_EQUIV / MASS
-            else:
-                a = COAST_EQUIV / MASS
-        else:
-            a = control[0] / MASS
+        #if np.abs(control[0]) < COAST_THRESH:
+            #if state[1][0] > 0:
+                #a = -COAST_EQUIV / MASS
+            #else:
+                #a = COAST_EQUIV / MASS
+        #else:
+            #a = control[0] / MASS
 
-        s = state[1][0] + a * CHUNK_DURATION
+        s = state[1][0]# + a * CHUNK_DURATION
         distance = s * CHUNK_DURATION
         yaw = state[0].getYaw()
 
@@ -156,6 +160,8 @@ class QCPlan2:
         self.auto_en = False
 
         self.extra_en = False
+
+        self.speed_control = SPEED_INIT
 
         try:
             self.waypoints = np.loadtxt("waypoints.csv", delimiter=',')
@@ -285,7 +291,9 @@ class QCPlan2:
             print("Solved")
             solution = self.ss.getSolutionPath()
             controls = solution.getControls()
-            accelerator = controls[0][0]
+            self.speed_control = self.speed_control + SPEED_STEP if sref[1][0] < SPEED_REAL else self.speed_control - SPEED_STEP
+            self.speed_control = min(max(self.speed_control, 0), CONTROL0H)
+            accelerator = self.speed_control#controls[0][0]
             steering = controls[0][1]
             maestrocar.set_control(accelerator, steering)
         else:
@@ -311,6 +319,7 @@ class QCPlan2:
         start_state = ob.State(self.statespace)
         start_state_ref = start_state()
         self.propagator.propagate(sref, (accelerator, steering), 1, start_state_ref)
+        start_state_ref[1][0] = SPEED_REAL
 
         start_point = np.array([start_state_ref[0].getX(), start_state_ref[0].getY()])
         nearest_point, nearest_dist, t, i = util.nearest_point_on_trajectory(start_point, self.waypoints)
